@@ -32,6 +32,7 @@ FlowChart
 Seat类
 
 //座位有3个基本属性：座位类型（F/E），座位编号，座位预定状态（是否已经被预定）
+
 class Seat{
 	public String type;
 	public int number;
@@ -58,6 +59,7 @@ class Seat{
 		return vacancy;
 	}
 }
+
 Ticket类
 
 class Ticket extends Seat {
