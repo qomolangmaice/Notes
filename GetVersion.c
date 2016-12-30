@@ -60,8 +60,8 @@ int main (int argc, char *argv[])
 *					  search_str -- 需要查找的字符串
 * Output         	: None
 * Return         	: u32Version -- 版本号
-* Author			: wangkeguan wwx423495
-* Others			: 
+* Author		: 
+* Others		: 
 *********************************************************************************************/
 uint32 GetVersion(FILE *fp, char *search_str)
 {
