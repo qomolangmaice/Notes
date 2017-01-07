@@ -8,10 +8,12 @@ https://download.qt.io/archive/qt/5.4/5.4.0/qt-opensource-windows-x86-mingw491_o
 Qt4.7.1 + QtCreator2.4.0
 ------------------------------------------------------------
 Qt2.4.0集成开发环境：qt-creator-win-opensource-2.4.0下载
-http://download.qt.io/archive/qtcreator/2.4/
+国内清华下载：https://mirrors.tuna.tsinghua.edu.cn/qt/archive/qt/4.7/qt-win-opensource-4.7.1-mingw.exe
+官方下载：http://download.qt.io/archive/qtcreator/2.4/
 
 Qt4.7.1开发库：qt-win-opensource-4.7.1-mingw下载
-http://download.qt.io/archive/qt/4.7/
+国内清华下载：https://mirrors.tuna.tsinghua.edu.cn/qt/archive/qtcreator/2.4/qt-creator-win-opensource-2.4.0.exe
+官方下载：http://download.qt.io/archive/qt/4.7/
 
 exe文件依赖关系分析工具：depends22_x86
 http://www.dependencywalker.com/depends22_x64.zip
@@ -30,3 +32,8 @@ http://blog.csdn.net/qq_32483145/article/details/51169518
 
 Qt学习笔记之——生成exe可执行文件并打包生成安装软件 
 http://blog.csdn.net/yang6464158/article/details/38023841
+
+
+清华大学开源软件镜像站
+https://mirrors.tuna.tsinghua.edu.cn/#
+(包含各个Linux发行版以及各个版本Qt，QtCreator)
