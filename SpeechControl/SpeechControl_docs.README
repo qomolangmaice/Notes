@@ -1,0 +1,52 @@
+
+###CMUSphinx Wiki
+http://cmusphinx.sourceforge.net/wiki/
+
+This page contains collaboratively developed documentation for the CMU Sphinx speech recognition engines.
+
+##Beginner User Documentation
+This section contains links to documents which describe how to use Sphinx to recognize speech. 
+Currently, we have very little in the way of end-user tools, so it may be a bit sparse for the forseeable future.
+
+CMUSphinx Tutorial For Developers: Getting started with CMUSphinx for developers
+Basic concepts of speech
+Overview of the CMUSphinx toolkit
+Before you start
+Building application using pocketsphinx
+Building application using sphinx4
+Using pocketsphinx on Android
+Building language models
+Adapting existing acoustic model
+Building the acoustic model
+Building a dictionary
+Debugging speech recognition accuracy
+You are in trouble - read the Frequenty Asked Questions (FAQ)
+
+CMU Sphinx Downloads
+http://cmusphinx.sourceforge.net/wiki/download
+
+Building application with pocketsphinx
+http://cmusphinx.sourceforge.net/wiki/tutorialpocketsphinx#dokuwiki__top
+--------------------------------------------------------------------------------------------------------------
+
+###Simon
+About Simon
+https://simon.kde.org/
+Simon is an open source speech recognition program that can replace your mouse and keyboard. 
+The system is designed to be as flexible as possible and will work with any language or dialect.
+Simon uses the KDE libraries, CMU SPHINX and / or Julius coupled with the HTK and runs on Windows and Linux.
+
+http://download.kde.org/stable/simon/0.4.1/src/simon-0.4.1.tar.bz2.mirrorlist
+--------------------------------------------------------------------------------------------------------------
+
+###POCKETVOX
+
+enter image description here
+
+Pocketvox is a both an application and a library written in C by Benoit Franquet.
+It uses Pocketsphinx to do voice recognition. The voice recognition is done offline and doesn't need an Internet connexion. 
+It's aim is to provide an eficient way to integrate voice recognition on the Linux desktop. More particularly, 
+its main goal is to give to visual impaired (as I am) a powerfull tool to control their desktop.
+
+https://github.com/benoitfragit/pocketVox
+--------------------------------------------------------------------------------------------------------------
