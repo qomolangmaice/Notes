@@ -1,3 +1,9 @@
+PocketSphinx语音识别系统的编译、安装和使用
+http://blog.csdn.net/zouxy09/article/details/7942784/
+
+语音识别的基础知识与CMUsphinx介绍
+http://blog.csdn.net/zouxy09/article/details/7941585
+
 语音识别
 http://www.cnblogs.com/huanghuang/category/286243.html
 
@@ -12,30 +18,15 @@ http://www.cnblogs.com/huanghuang/archive/2011/07/20/2111834.html
 
 Sphinx应用程序编写
 http://www.cnblogs.com/huanghuang/archive/2012/08/08/2627747.html
+
 --------------------------------------------------------------------------------------------------------------
+### PocketSphinx
+PocketSphinx is a lightweight speech recognition engine, specifically tuned for handheld and mobile devices,
+though it works equally well on the desktop
+https://github.com/cmusphinx/pocketsphinx
 
-###CMUSphinx Wiki
+### CMUSphinx Wiki
 http://cmusphinx.sourceforge.net/wiki/
-
-This page contains collaboratively developed documentation for the CMU Sphinx speech recognition engines.
-
-##Beginner User Documentation
-This section contains links to documents which describe how to use Sphinx to recognize speech. 
-Currently, we have very little in the way of end-user tools, so it may be a bit sparse for the forseeable future.
-
-CMUSphinx Tutorial For Developers: Getting started with CMUSphinx for developers
-Basic concepts of speech
-Overview of the CMUSphinx toolkit
-Before you start
-Building application using pocketsphinx
-Building application using sphinx4
-Using pocketsphinx on Android
-Building language models
-Adapting existing acoustic model
-Building the acoustic model
-Building a dictionary
-Debugging speech recognition accuracy
-You are in trouble - read the Frequenty Asked Questions (FAQ)
 
 CMU Sphinx Downloads
 http://cmusphinx.sourceforge.net/wiki/download
