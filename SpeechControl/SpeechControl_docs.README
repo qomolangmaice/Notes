@@ -7,6 +7,12 @@ http://blog.csdn.net/zouxy09/article/details/7941585
 几个常见的语音交互平台的简介和比较
 http://blog.csdn.net/lchunli/article/details/18504799
 
+PocketSphinx语音识别和turtlebot的语音控制--18
+http://www.cnblogs.com/zxouxuewei/p/5273178.html
+
+【OpenHW12参赛手记】ROS探索总结（十）——语音控制
+http://blog.exbot.net/archives/634
+
 语音识别
 http://www.cnblogs.com/huanghuang/category/286243.html
 
@@ -25,11 +31,38 @@ http://www.cnblogs.com/huanghuang/archive/2012/08/08/2627747.html
 Installing CMU-Sphinx on Ubuntu
 http://jrmeyer.github.io/installation/2016/01/09/Installing-CMU-Sphinx-on-Ubuntu.html
 
+训练自已的中文语言模型与声学模型
+http://blog.csdn.net/u014473682/article/details/53940375
+
+PocketSphinx语音识别系统语言模型的训练和声学模型的改进
+http://www.cnblogs.com/bhlsheji/p/4514475.html
+
+Jasper:基于树莓派的开源语音控制助理
+http://tieba.baidu.com/p/4086170600
+
+基于sphinx的汉语连续语音识别(王韵)
+http://www.docin.com/p-964700396.html
+Sphinx用于汉语连续数字语音识别的研究(王韵)
+http://www.docin.com/p-113430050.html?docfrom=rrela
+
+汉语连续语音识别系统的研究与实现
+http://wenku.baidu.com/view/983fcc0f581b6bd97f19ead9.html?re=view
+
+硕士学位论文——非特定人连续数字识别方法与汉语语音数据库的研究
+http://www.docin.com/p-32388531.html?docfrom=rrela
+
+汉语语音识别中声学建模
+http://www.docin.com/p-14570416.html?docfrom=rrela
 --------------------------------------------------------------------------------------------------------------
 ### PocketSphinx
 PocketSphinx is a lightweight speech recognition engine, specifically tuned for handheld and mobile devices,
 though it works equally well on the desktop
 https://github.com/cmusphinx/pocketsphinx
+
+CMUSphinx相关软件下载地址:
+https://sourceforge.net/projects/cmusphinx/files/
+各种语言的语音模型下载(包括普通话)
+https://sourceforge.net/projects/cmusphinx/files/Acoustic%20and%20Language%20Models/
 
 ### CMUSphinx Wiki
 http://cmusphinx.sourceforge.net/wiki/
