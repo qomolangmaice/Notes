@@ -1,6 +1,9 @@
 PocketSphinx语音识别系统的编译、安装和使用
 http://blog.csdn.net/zouxy09/article/details/7942784/
 
+PocketSphinx 与 Asterisk做集成
+http://www.lxway.net/816921051.html
+
 语音识别的基础知识与CMUsphinx介绍
 http://blog.csdn.net/zouxy09/article/details/7941585
 
@@ -37,8 +40,26 @@ http://blog.csdn.net/u014473682/article/details/53940375
 PocketSphinx语音识别系统语言模型的训练和声学模型的改进
 http://www.cnblogs.com/bhlsheji/p/4514475.html
 
+Sphinx语音识别学习记录 （四）-小范围语音中文识别
+http://www.cnblogs.com/yin52133/archive/2012/07/12/2588201.html#2525875
+
+PocketSphinx语音识别系统声学模型的训练与使用
+http://www.voidcn.com/blog/zouxy09/article/p-2470817.html
+
+六、改进现有的声学模型
+http://www.voidcn.com/blog/u012637501/article/p-1783569.html
+
+七、训练自己的声学模型
+http://www.voidcn.com/blog/u012637501/article/p-1783568.html
+
+Android平台使用PocketSphinx做离线语音识别，小范围语音99%识别率
+http://zuoshu.iteye.com/blog/1463867
+
 Jasper:基于树莓派的开源语音控制助理
 http://tieba.baidu.com/p/4086170600
+
+想用语音控制你的BananaPro？——Jasper的安装、配置与使用
+http://forum.lemaker.org/cn/thread-8986-1-1.html
 
 基于sphinx的汉语连续语音识别(王韵)
 http://www.docin.com/p-964700396.html
