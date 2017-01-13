@@ -43,6 +43,9 @@ http://www.cnblogs.com/bhlsheji/p/4514475.html
 Sphinx语音识别学习记录 （四）-小范围语音中文识别
 http://www.cnblogs.com/yin52133/archive/2012/07/12/2588201.html#2525875
 
+Running pocketsphinx Speech Recognition on Ubuntu
+https://www.unicom.com/blog/entry/686
+
 PocketSphinx语音识别系统声学模型的训练与使用
 http://www.voidcn.com/blog/zouxy09/article/p-2470817.html
 
@@ -74,6 +77,9 @@ http://www.docin.com/p-32388531.html?docfrom=rrela
 
 汉语语音识别中声学建模
 http://www.docin.com/p-14570416.html?docfrom=rrela
+
+基于OMAP5912的嵌入式语音识别引擎的研究
+http://www.docin.com/p-143847407.html
 --------------------------------------------------------------------------------------------------------------
 ### PocketSphinx
 PocketSphinx is a lightweight speech recognition engine, specifically tuned for handheld and mobile devices,
@@ -128,3 +134,9 @@ https://github.com/ashram78/Jasper-Ubuntu-Gnome-16.10/blob/master/install_jasper
 Linux-Jasper-Manjaro-Ubuntu-Install-V1
 https://github.com/Mainman002/Linux-Jasper-Manjaro-Ubuntu-Install-V1/blob/master/steps2buildjasper.txt
 --------------------------------------------------------------------------------------------------------------
+
+pocketsphinx Usage:
+# pocketsphinx_continuous \
+    -hmm /usr/share/pocketsphinx/model/hmm/en_US/hub4wsj_sc_8k \
+    -dict /usr/share/pocketsphinx/model/lm/en_US/cmu07a.dic \
+    -lm /usr/share/pocketsphinx/model/lm/en_US/hub4.5000.DMP
