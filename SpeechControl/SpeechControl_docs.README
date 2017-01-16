@@ -55,6 +55,18 @@ https://www.unicom.com/blog/entry/686
 PocketSphinx语音识别系统声学模型的训练与使用
 http://www.voidcn.com/blog/zouxy09/article/p-2470817.html
 
+Ngram语言模型
+https://flystarhe.github.io/2016/08/16/ngram/
+
+ngram模型中文语料实验step by step(1)-分词与统计
+http://www.xuebuyuan.com/91381.html
+
+建立语言模型几种方法及使用
+http://blog.csdn.net/u012637501/article/details/40894947
+
+CMU sphinx学习（――训练自已的中文语言模型与声学模型）
+http://www.lai18.com/content/10254249.html
+
 六、改进现有的声学模型
 http://www.voidcn.com/blog/u012637501/article/p-1783569.html
 
