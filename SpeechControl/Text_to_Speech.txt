@@ -1,8 +1,21 @@
- TTS技术简单介绍和Ekho（余音）TTS的安装与编程
- http://blog.csdn.net/zouxy09/article/details/7909154
+TTS技术简单介绍和Ekho（余音）TTS的安装与编程
+http://blog.csdn.net/zouxy09/article/details/7909154
  
 Ekhp -- Chinese text-to-speech engine
 https://github.com/hgneng/ekho
 
 eGuideDog(Ekho)
 http://www.eguidedog.net/cn/index.php
+
+eSpeak开发指南
+http://www.eguidedog.net/doc/doc_espeak.php
+
+Linux中文朗读软件--espeak
+http://blog.csdn.net/derryzhang/article/details/5769267
+
+7个开源的TTS（文本转语音）系统
+http://blog.csdn.net/gaohuanjie/article/details/22647159
+
+eSpeak1.06的源码调试分析
+http://blog.csdn.net/gaohuanjie/article/details/22649681
+
