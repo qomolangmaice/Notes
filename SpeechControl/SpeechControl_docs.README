@@ -73,6 +73,12 @@ http://www.xuebuyuan.com/91381.html
 建立语言模型几种方法及使用
 http://blog.csdn.net/u012637501/article/details/40894947
 
+语言模型工具IRSTLM安装及试用手记
+http://www.52nlp.cn/language-modeling-toolkit-irstlm-installation-and-trial-noting
+
+IRSTLM安装手记（Ubuntu）
+http://blog.sina.com.cn/s/blog_4a0a514901015n6c.html
+
 CMU sphinx学习（――训练自已的中文语言模型与声学模型）
 http://www.lai18.com/content/10254249.html
 
@@ -90,6 +96,9 @@ http://tieba.baidu.com/p/4086170600
 
 想用语音控制你的BananaPro？——Jasper的安装、配置与使用
 http://forum.lemaker.org/cn/thread-8986-1-1.html
+
+Linux平台下Sphinx语音识别
+http://www.paper.edu.cn/advanced_search/resultQuickSearch?type=0&judge=0&filename=%5DLinux+%E5%B9%B3%E5%8F%B0%E4%B8%8BSphinx+%E8%AF%AD%E9%9F%B3%E8%AF%86%E5%88%AB
 
 基于sphinx的汉语连续语音识别(王韵)
 http://www.docin.com/p-964700396.html
