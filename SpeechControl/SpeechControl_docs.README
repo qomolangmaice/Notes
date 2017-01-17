@@ -127,7 +127,28 @@ http://cmusphinx.sourceforge.net/wiki/download
 Building application with pocketsphinx
 http://cmusphinx.sourceforge.net/wiki/tutorialpocketsphinx#dokuwiki__top
 --------------------------------------------------------------------------------------------------------------
+SpeechRecognition/3.2.0
+https://pypi.python.org/pypi/SpeechRecognition/3.2.0
 
+Mandarin Chinese: /speech_recognition/pocketsphinx-data/zh-CN/:
+/speech_recognition/pocketsphinx-data/zh-CN/language-model.lm.bin is generated as follows:
+Download zh_broadcastnews_64000_utf8.DMP from the Sphinx Mandarin language model.
+Convert from DMP (an obselete Sphinx binary format) to ARPA format: 
+# sphinx_lm_convert -i zh_broadcastnews_64000_utf8.DMP -o chinese.lm -ofmt arpa.
+
+Prune with a threshold of 0.00000004 using 
+# prune-lm --threshold=4e-8 chinese.lm chinese.lm.
+
+Convert from ARPA format to Sphinx binary format: 
+# sphinx_lm_convert -i chinese.lm -o chinese.lm.bin.
+
+Replace /speech_recognition/pocketsphinx-data/zh-CN/language-model.lm.bin with chinese.lm.bin created in the previous step.
+/speech_recognition/pocketsphinx-data/zh-CN/pronounciation-dictionary.dict is zh_broadcastnews_utf8.dic from the Sphinx Mandarin language model.
+
+/speech_recognition/pocketsphinx-data/zh-CN/acoustic-model/ is extracted from zh_broadcastnews_16k_ptm256_8000.tar.bz2 in the Sphinx Mandarin acoustic model.
+
+To get better Chinese recognition accuracy at the expense of higher disk space and RAM usage, simply skip step 3 when preparing zh_broadcastnews_64000_utf8.DMP.
+--------------------------------------------------------------------------------------------------------------
 ###Simon
 About Simon
 https://simon.kde.org/
