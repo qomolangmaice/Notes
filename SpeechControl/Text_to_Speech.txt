@@ -3,3 +3,6 @@
  
 Ekhp -- Chinese text-to-speech engine
 https://github.com/hgneng/ekho
+
+eGuideDog(Ekho)
+http://www.eguidedog.net/cn/index.php
