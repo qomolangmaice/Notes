@@ -28,6 +28,6 @@ typedef unsigned int uint32;
  * @author  
  * @date 2017-01-18 12:12
  */
-extern char* merge_str(uint8* cmd);
+extern char* merge_str(char* cmd);
 
 #endif
