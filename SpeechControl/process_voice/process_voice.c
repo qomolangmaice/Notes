@@ -36,6 +36,13 @@ void process_close(char* cmd)
     free(tmp);
 }
 
+/*******************************************************************************
+* Function Name  	: process_voice
+* Description    	: 处理语音识别后获得的字符串所包含的内容
+* Input          	: hyp -- 处理语音识别后获得的字符串
+* Output         	: None
+* Return         	: None
+*******************************************************************************/
 void process_voice(char* hyp)
 {
     int i = 0;
