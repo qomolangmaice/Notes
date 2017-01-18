@@ -29,6 +29,6 @@
  * @author  
  * @date 2017-01-18 12:12
  */
-extern void process_voice(uint8* hyp);
+extern void process_voice(char* hyp);
 
 #endif
