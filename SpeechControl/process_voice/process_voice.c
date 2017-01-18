@@ -1,36 +1,42 @@
-#include "process_voice.h"
-#include "test_module.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "test_module/test_module.h"
+
+//typedef char uint8;
+
+#define ITEM_OF(array)	    (int)(sizeof(array) / sizeof(array[0]))
 
 typedef struct PROCESS_VOICE
 {
-   uint8* utterance;
-   uint8* cmd;
-   void (*p_process_func)(uint8* cmd);
+   char* utterance;
+   char* cmd;
+   void (*p_process_func)(char* cmd);
 }PROCESS_VOICE_T;
 
-static void process_open(uint8* cmd);
-static void process_close(uint8* cmd);
+static void process_open(char* cmd);
+static void process_close(char* cmd);
 
-const PROCESS_VOICE_T s_process_voice[] = 
+PROCESS_VOICE_T s_process_voice[] = 
 {
   {"打开 终端", "/usr/bin/gnome-terminal", process_open},
   {"关闭 终端", "/usr/bin/gnome-terminal", process_close}
 };
 
-void process_open(uint8* cmd)
+void process_open(char* cmd)
 {
     system(cmd);
 }
 
-void process_close(uint8* cmd)
+void process_close(char* cmd)
 {
-    uint8* tmp = merge_str(cmd);
+    char* tmp = merge_str(cmd);
     system(tmp);
     
     free(tmp);
 }
 
-void process_voice(uint8* hyp)
+void process_voice(char* hyp)
 {
     int i = 0;
     //pthread_t *t;
@@ -52,7 +58,7 @@ void process_voice(uint8* hyp)
 
 int main(void)
 {
-    process_voice("打开 终端");
+    //process_voice("打开 终端");
     process_voice("关闭 终端");
     
     return 0;
