@@ -22,7 +22,10 @@ uint32 cout_char_len(const uint8* str, uint8* p_char_pos)
 char* merge_str(uint8* cmd)
 {
     const uint8* front_cmd = "ps -ef | grep ";
-    const uint8* back_cmd = " | awk '{print $2}' | xargs kill -9";
+    // 杀掉所有相同程序名的多个进程
+    //const uint8* back_cmd = " | awk '{print $2}' | xargs kill -9"; 
+    // 杀掉相同程序名的最新打开的进程
+    const uint8* back_cmd = " | grep -v grep | cut -c 9-15 | tail -n 1 | xargs kill -9";
     
     if (NULL == cmd)
     {
