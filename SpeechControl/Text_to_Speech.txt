@@ -1,8 +1,11 @@
 TTS技术简单介绍和Ekho（余音）TTS的安装与编程
 http://blog.csdn.net/zouxy09/article/details/7909154
  
-Ekhp -- Chinese text-to-speech engine
+Ekho -- Chinese text-to-speech engine
 https://github.com/hgneng/ekho
+
+Programme with Ekho
+http://www.eguidedog.net/doc/doc_programme_with_ekho.php
 
 eGuideDog(Ekho)
 http://www.eguidedog.net/cn/index.php
