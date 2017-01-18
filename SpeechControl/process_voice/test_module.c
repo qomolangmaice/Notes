@@ -1,11 +1,11 @@
 #include "test_module.h"
 
-static uint32 cout_char_len(const uint8* str, uint8* p_char_pos);
+static int cout_char_len(char* str, char* p_char_pos);
 
-uint32 cout_char_len(const uint8* str, uint8* p_char_pos)
+int cout_char_len(char* str, char* p_char_pos)
 {
-    uint32 u32_num = 0;
-    uint8* tmp = str;
+    int u32_num = 0;
+    char* tmp = str;
     
     if (NULL == str || NULL == p_char_pos)
     {
@@ -19,31 +19,31 @@ uint32 cout_char_len(const uint8* str, uint8* p_char_pos)
     return (u32_num + 1);
 }
 
-char* merge_str(uint8* cmd)
+char* merge_str(char* cmd)
 {
-    const uint8* front_cmd = "ps -ef | grep ";
+    char* front_cmd = "ps -ef | grep ";
     // 杀掉所有相同程序名的多个进程
-    //const uint8* back_cmd = " | awk '{print $2}' | xargs kill -9"; 
+    //const char* back_cmd = " | awk '{print $2}' | xargs kill -9"; 
     // 杀掉相同程序名的最新打开的进程
-    const uint8* back_cmd = " | grep -v grep | cut -c 9-15 | tail -n 1 | xargs kill -9";
+   char* back_cmd = " | grep -v grep | cut -c 9-15 | tail -n 1 | xargs kill -9";  
     
     if (NULL == cmd)
     {
         printf("cmd is NULL.\n");
-        return NULL;
+        return (char*)0;
     }
     
     // 获取最后一个'/'出现的地址
-    uint8* slash_pos = strrchr(cmd, '/');  
+    char* slash_pos = strrchr(cmd, '/');  
     // 最后一个'/'地址之后的字符串长度
-    uint32 dst_cmd_len = strlen(cmd) - cout_char_len(cmd, slash_pos);   
-    uint8 dst_cmd[32] = {0};
+    int dst_cmd_len = strlen(cmd) - cout_char_len(cmd, slash_pos);   
+    char dst_cmd[32] = {0};
     strncpy(dst_cmd, slash_pos + 1, dst_cmd_len);
     dst_cmd[dst_cmd_len] = '\0';
     
     int merge_str_len = strlen(front_cmd) + strlen(back_cmd) + dst_cmd_len;
     
-    uint8* merge_str = (uint8*)malloc(sizeof(uint8) * (merge_str_len + 2));
+    char* merge_str = (char*)malloc(sizeof(char) * (merge_str_len + 2));
     if (merge_str == NULL)
         printf("merge_str is NULL.\n");
         
@@ -60,7 +60,7 @@ char* merge_str(uint8* cmd)
     return merge_str;
 }
 
-void open(uint8* cmd)
+void open(char* cmd)
 {
     system(cmd);
 }
@@ -76,17 +76,17 @@ void test_strrchr(void)
 
 void test_cout_char_len(void)
 {
-    const uint8* cmd = "/usr/bin/ls";
-    uint8* slash_pos = strrchr(cmd, '/');
+    char* cmd = "/usr/bin/ls";
+    char* slash_pos = strrchr(cmd, '/');
     
-    uint32 num = cout_char_len(cmd, slash_pos);
+    int num = cout_char_len(cmd, slash_pos);
     printf("test_cout_char_len -- num = %d\n", num);
 }
 
 void test_merge_str(void)
 {
-    uint8* cmd = "/usr/bin/deepin-terminal";
-    uint8* tmp = merge_str(cmd);
+    char* cmd = "/usr/bin/deepin-terminal";
+    char* tmp = merge_str(cmd);
     printf("test_merge_str -- tmp: %s\n", tmp);
     
     free(tmp);
