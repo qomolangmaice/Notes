@@ -25,13 +25,13 @@ PROCESS_VOICE_T s_process_voice[] =
 
 void process_open(char* cmd)
 {
-    system(cmd);
+    execute_cmd(cmd);
 }
 
 void process_close(char* cmd)
 {
     char* tmp = merge_str(cmd);
-    system(tmp);
+    execute_cmd(tmp);
     
     free(tmp);
 }
