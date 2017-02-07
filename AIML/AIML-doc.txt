@@ -10,3 +10,12 @@ aiml的C++实现，支持中文，改自libaiml
 
 https://github.com/kaoshijuan/aiml
 ---------------------------------------------------------------------------------------------------------------------------------
+RebeccaAIML is an enterprise cross platform open source 
+AIML development platform. RebeccaAIML supports C++, Java,
+C#, and Python as well as many other programming languages
+and AIML development out of the box. RebeccaAIML also 
+comes with an array of AIML administration tools, great 
+documentation, and an eclipse AIML editor plugin.
+
+http://rebecca-aiml.sourceforge.net/userGuide.htm#rs_admin
+---------------------------------------------------------------------------------------------------------------------------------
