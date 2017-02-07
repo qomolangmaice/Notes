@@ -1,0 +1,12 @@
+---------------------------------------------------------------------------------------------------------------------------------
+jalice
+an AIML engine written in C++
+J-Alice is an AIML engine written in C++. It comes with support for multiple channels and servers, and a small webserver.
+
+https://github.com/cuongth/jalice
+---------------------------------------------------------------------------------------------------------------------------------
+aiml
+aiml的C++实现，支持中文，改自libaiml
+
+https://github.com/kaoshijuan/aiml
+---------------------------------------------------------------------------------------------------------------------------------
