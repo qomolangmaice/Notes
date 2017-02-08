@@ -19,3 +19,18 @@ documentation, and an eclipse AIML editor plugin.
 
 http://rebecca-aiml.sourceforge.net/userGuide.htm#rs_admin
 ---------------------------------------------------------------------------------------------------------------------------------
+A Tutorial For Adding Knowledge to Your Robot
+https://www.pandorabots.com/botmaster/en/tutorial
+---------------------------------------------------------------------------------------------------------------------------------
+聊天机器人文档（AIML）
+http://blog.csdn.net/wxlfight/article/details/8093792
+
+Alice-Robot
+https://github.com/wxlfight/Alice-Robot
+---------------------------------------------------------------------------------------------------------------------------------
+ALICEBOT 聊天机器人 中文 可以实现学习系统
+http://readsourcecode.com/read248/sourcecode/java/applet/detail1150456.html
+---------------------------------------------------------------------------------------------------------------------------------
+aliceCN 是基于AIML的对话机器人
+https://github.com/leo108/aliceCN
+---------------------------------------------------------------------------------------------------------------------------------
