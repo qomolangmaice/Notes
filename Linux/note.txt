@@ -8,5 +8,6 @@ http://mirror.its.dal.ca/debian/pool/main/
 https://packages.debian.org/软件包 基于软件包名称的搜索。
 https://packages.debian.org/src:软件包 基于源码包名称的搜索。
 
-
-
+比如要查找xcb-util-dev软件包，可以通过https://www.debian.org/distrib/packages得到查找结果，
+并在以下网址找到下载链接：
+https://packages.debian.org/sid/amd64/libxcb-util0-dev/download
