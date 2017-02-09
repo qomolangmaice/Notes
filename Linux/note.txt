@@ -1,0 +1,12 @@
+如果在Debian系的系统上缺少软件包或者链接库：
+
+可以在以下站点查找软件包
+https://www.debian.org/distrib/packages
+http://mirror.its.dal.ca/debian/pool/main/
+
+部分搜索支持下列快捷方式:
+https://packages.debian.org/软件包 基于软件包名称的搜索。
+https://packages.debian.org/src:软件包 基于源码包名称的搜索。
+
+
+
