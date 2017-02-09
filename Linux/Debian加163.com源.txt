@@ -1,0 +1,10 @@
+１，修改源列表
+＃vi /etc/apt/soure.list
+加入以下内容：
+deb http://mirrors.163.com/debian/ squeeze main non-free contrib
+deb http://mirrors.163.com/debian/ squeeze-proposed-updates main non-free contrib
+deb-src http://mirrors.163.com/debian/ squeeze main non-free contrib
+deb-src http://mirrors.163.com/debian/ squeeze-proposed-updates main non-free contrib
+
+２，执行变更
+#apt-get update
