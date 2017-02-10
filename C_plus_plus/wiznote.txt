@@ -4,6 +4,11 @@ http://www.jizhuomi.com/software/366.html
 C++学习攻略--怎样学好C++语言
 http://www.jizhuomi.com/software/391.html
 
+C++编程开发学习的50条建议
+http://www.jizhuomi.com/software/283.html
+
+
+
 C++的函数重载
 http://www.cnblogs.com/skynet/archive/2010/09/05/1818636.html
 
