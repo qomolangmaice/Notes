@@ -1,13 +1,14 @@
+谈谈8年C++面向对象设计的经验体会
+http://www.jizhuomi.com/software/366.html
+
+C++学习攻略--怎样学好C++语言
+http://www.jizhuomi.com/software/391.html
+
 C++的函数重载
 http://www.cnblogs.com/skynet/archive/2010/09/05/1818636.html
 
 C++静态库与动态库
 http://www.cnblogs.com/skynet/p/3372855.html#3599633
 
-------------------------------------------------------------------------------------------------------------------------------
-Linux Socket编程（不限Linux）
-http://www.cnblogs.com/skynet/archive/2010/12/12/1903949.html
 
-Linux多线程编程（不限Linux）
-http://www.cnblogs.com/skynet/archive/2010/10/30/1865267.html#3603662
 
