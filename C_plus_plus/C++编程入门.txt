@@ -1,0 +1,62 @@
+零起点学通c++完全版 范磊 标清pdf  
+http://download.csdn.net/detail/xiaxiang_2004/5213316#comment
+
+0.C++编程入门系列之前言
+http://www.jizhuomi.com/software/17.html
+
+1.C++编程入门系列之一（进制数）
+http://www.jizhuomi.com/software/21.html
+
+2.C++编程入门系列之二（原码、反码与补码）
+http://www.jizhuomi.com/software/23.html
+
+4.C++编程入门系列之四（数据类型）
+http://www.jizhuomi.com/software/29.html
+
+5.C++编程入门系列之五（运算符和表达式）
+http://www.jizhuomi.com/software/32.html
+
+6.C++编程入门系列之六（算法的基本控制结构之选择结构）
+http://www.jizhuomi.com/software/34.html
+
+7.C++编程入门系列之七（算法的基本控制结构之循环结构）
+http://www.jizhuomi.com/software/37.html
+
+8.C++编程入门系列之八（自定义数据类型）
+http://www.jizhuomi.com/software/38.html
+
+9.C++编程入门系列之九（函数的定义与调用）
+http://www.jizhuomi.com/software/41.html
+
+10.C++编程入门系列之十（函数的参数传递与内联函数）
+http://www.jizhuomi.com/software/43.html
+
+11.C++编程入门系列之十一（重载函数与函数模板） -- C++重点掌握
+http://www.jizhuomi.com/software/45.html
+
+12.C++编程入门系列之十二（类与对象：面向对象设计的基本思想和特点）-- C++重点掌握
+http://www.jizhuomi.com/software/47.html
+
+13.C++编程入门系列之十三（类与对象：类的声明、成员的访问控制和对象）-- C++重点掌握
+http://www.jizhuomi.com/software/49.html
+
+14.C++编程入门系列之十四（类与对象：构造函数和析构函数）-- C++重点掌握
+http://www.jizhuomi.com/software/51.html
+
+15.C++编程入门系列之十五（类与对象：类的组合）-- C++重点掌握
+http://www.jizhuomi.com/software/53.html
+
+16.C++编程入门系列之十六（类与对象：类模板）-- C++重点掌握
+http://www.jizhuomi.com/software/55.html
+
+17.C++编程入门系列之十七（类与对象：UML简介） 
+http://www.jizhuomi.com/software/57.html
+
+18.C++编程入门系列之十八（C++程序设计必知：作用域和可见性）-- C++重点掌握
+http://www.jizhuomi.com/software/59.html
+
+19.C++编程入门系列之十九（C++程序设计必知：生存期）
+http://www.jizhuomi.com/software/60.html
+
+20.C++编程入门系列之二十（C++程序设计必知：数据和函数）
+http://www.jizhuomi.com/software/62.html
