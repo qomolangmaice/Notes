@@ -76,8 +76,8 @@ PROCESS_VOICE_T g_process_voices[] =
   {"加大 亮度", "xgamma -gamma ", NULL, adjust_brightness}, 
   {"减小 亮度", "xgamma -gamma ", NULL, adjust_brightness},
 
-  {"放 一个 电影", "deepin-movie 'Blank Space - Taylor Swift.mp4'", open_app, NULL},
-  {"放 一首 歌", "play 'Faded.wav'", open_app, NULL},
+  {"放 一个 电影", "sh loop_and_random_play_movie.sh start", open_app, NULL},
+  {"放 一首 歌", "sh loop_and_random_play_music.sh start", open_app, NULL},
 
   {"关闭 音乐", "play", close_app, NULL},
 };
