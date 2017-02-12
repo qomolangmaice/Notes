@@ -1,6 +1,3 @@
-零起点学通c++完全版 范磊 标清pdf  
-http://download.csdn.net/detail/xiaxiang_2004/5213316#comment
-
 0.C++编程入门系列之前言
 http://www.jizhuomi.com/software/17.html
 
@@ -53,15 +50,52 @@ http://www.jizhuomi.com/software/55.html
 http://www.jizhuomi.com/software/57.html
 
 18.C++编程入门系列之十八（C++程序设计必知：作用域和可见性）-- C++重点掌握
-http://www.jizhuomi.com/software/59.html
+http://www.jizhuomi.com/software/59.html 
 
-19.C++编程入门系列之十九（C++程序设计必知：生存期）
+19.C++编程入门系列之十九（C++程序设计必知：生存期）-- C++重点掌握
 http://www.jizhuomi.com/software/60.html
 
-20.C++编程入门系列之二十（C++程序设计必知：数据和函数）
+20.C++编程入门系列之二十（C++程序设计必知：数据和函数）-- C++重点掌握
 http://www.jizhuomi.com/software/62.html
 
-21.C++编程入门系列之二十一（C++程序设计必知：类的静态成员）
+21.C++编程入门系列之二十一（C++程序设计必知：类的静态成员）-- C++重点掌握
 http://www.jizhuomi.com/software/64.html
 
-22.
+22.C++编程入门系列之二十二（C++程序设计必知：友元）-- C++重点掌握
+http://www.jizhuomi.com/software/66.html
+
+23.C++编程入门系列之二十三（C++程序设计必知：常引用、常对象和对象的常成员）-- C++重点掌握
+http://www.jizhuomi.com/software/68.html
+
+24.C++编程入门系列之二十四（C++程序设计必知：多文件结构和编译预处理命令）
+http://www.jizhuomi.com/software/70.html
+
+25.C++编程入门系列之二十五（数组、指针和字符串：数组的声明和使用）-- C++重点掌握
+http://www.jizhuomi.com/software/72.html
+
+26.C++编程入门系列之二十六（数组、指针和字符串：数组的存储与初始化、对象数组、数组作为函数参数）
+http://www.jizhuomi.com/software/74.html
+
+27.C++编程入门系列之二十七（数组、指针和字符串：指针变量的声明、地址相关运算--“*”和“&”）
+http://www.jizhuomi.com/software/76.html
+
+28.C++编程入门系列之二十八（数组、指针和字符串：指针的赋值和指针运算）
+http://www.jizhuomi.com/software/78.html
+
+29.C++编程入门系列之二十九（数组、指针和字符串：指向数组元素的指针和指针数组）
+http://www.jizhuomi.com/software/80.html
+
+30.C++编程入门系列之三十（数组、指针和字符串：指针用作函数参数、指针型函数和函数指针）
+http://www.jizhuomi.com/software/82.html
+
+31.C++编程入门系列之三十一（数组、指针和字符串：对象指针）
+http://www.jizhuomi.com/software/84.html
+
+32.C++编程入门系列之三十二（数组、指针和字符串：动态内存分配和释放）
+http://www.jizhuomi.com/software/86.html
+
+33.
+
+
+零起点学通c++完全版 范磊 标清pdf  
+http://download.csdn.net/detail/xiaxiang_2004/5213316#comment
