@@ -60,3 +60,8 @@ http://www.jizhuomi.com/software/60.html
 
 20.C++编程入门系列之二十（C++程序设计必知：数据和函数）
 http://www.jizhuomi.com/software/62.html
+
+21.C++编程入门系列之二十一（C++程序设计必知：类的静态成员）
+http://www.jizhuomi.com/software/64.html
+
+22.
