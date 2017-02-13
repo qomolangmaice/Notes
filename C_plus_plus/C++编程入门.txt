@@ -73,13 +73,13 @@ http://www.jizhuomi.com/software/70.html
 25.C++编程入门系列之二十五（数组、指针和字符串：数组的声明和使用）-- C++重点掌握
 http://www.jizhuomi.com/software/72.html
 
-26.C++编程入门系列之二十六（数组、指针和字符串：数组的存储与初始化、对象数组、数组作为函数参数）
+26.C++编程入门系列之二十六（数组、指针和字符串：数组的存储与初始化、对象数组、数组作为函数参数）-- C++重点掌握
 http://www.jizhuomi.com/software/74.html
 
-27.C++编程入门系列之二十七（数组、指针和字符串：指针变量的声明、地址相关运算--“*”和“&”）
+27.C++编程入门系列之二十七（数组、指针和字符串：指针变量的声明、地址相关运算--“*”和“&”）-- C++重点掌握
 http://www.jizhuomi.com/software/76.html
 
-28.C++编程入门系列之二十八（数组、指针和字符串：指针的赋值和指针运算）
+28.C++编程入门系列之二十八（数组、指针和字符串：指针的赋值和指针运算）-- C++重点掌握
 http://www.jizhuomi.com/software/78.html
 
 29.C++编程入门系列之二十九（数组、指针和字符串：指向数组元素的指针和指针数组）
@@ -88,13 +88,17 @@ http://www.jizhuomi.com/software/80.html
 30.C++编程入门系列之三十（数组、指针和字符串：指针用作函数参数、指针型函数和函数指针）
 http://www.jizhuomi.com/software/82.html
 
-31.C++编程入门系列之三十一（数组、指针和字符串：对象指针）
+31.C++编程入门系列之三十一（数组、指针和字符串：对象指针）-- C++重点掌握
 http://www.jizhuomi.com/software/84.html
 
-32.C++编程入门系列之三十二（数组、指针和字符串：动态内存分配和释放）
+32.C++编程入门系列之三十二（数组、指针和字符串：动态内存分配和释放）-- C++重点掌握
 http://www.jizhuomi.com/software/86.html
 
-33.
+33.C++编程入门系列之三十三（数组、指针和字符串：用字符数组存放和处理字符串）
+http://www.jizhuomi.com/software/88.html
+
+34.C++编程入门系列之三十四（数组、指针和字符串：string类）
+http://www.jizhuomi.com/software/90.html
 
 
 零起点学通c++完全版 范磊 标清pdf  
