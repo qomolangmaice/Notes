@@ -1,0 +1,234 @@
+/**************************************************************************************************
+* Function Name  	: DRV_ShellInit
+* Description    	: Shell后台初始化
+* Input          	: pstCmdMenu -- 顶级菜单的起始地址
+* Output         	: None
+* Return         	: 0 -- 成功 
+					  其他 -- 失败
+* Author			: 	
+* Others			: None
+********************************************************************************/
+u32 DRV_ShellInit(const CMD_MENU* pstCmdMenu)
+{
+	int i;
+
+	RecoverUartInit();
+
+	for (i = 0; i < MAX_CMD_HISTORY; i++)
+	{
+		H_command[i][0] = '\0';
+	}
+
+	command = H_command[0];
+	EditPos = 0;
+	InsPos = 0;
+	HistoryCmdPos = 0;
+	CurrentCmdPos = 0;
+
+	pCMD = pstCmdMenu;
+	pCmdTable = pCMD;
+	pLastCMD = pCMD;
+	s_ulSetParaFlag = FALSE;
+	SetParaCallBack = NULL;
+	DRV_Printf("%s\r\n", StartString);
+	DRV_Printf( "%s%s%s", Prompt, SecPrompt, ThirPrompt);
+
+	return 0;
+}
+
+/*******************************************************************************
+* Function Name  	: DRV_ShellPrintPrompt
+* Description    	: Shell打印提示信息
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+void DRV_ShellPrintPrompt(void)
+{
+	DRV_Printf( "%s%s%s", Prompt, SecPrompt, ThirPrompt);
+}
+
+/*******************************************************************************
+* Function Name  	: ChangeShellMode
+* Description    	: Shell命令模式和参数设置模式切换函数
+* Input          	: pPrompt -- 命令模式
+					  sp      -- 参数设置模式
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void ChangeShellMode(char *pPrompt, setPara sp)
+{
+	if (sp == NULL)
+	{
+		s_ulSetParaFlag = FALSE;
+	}
+	else
+	{
+		s_ulSetParaFlag = TRUE;
+		SetParaCallBack = sp;
+		DRV_Printf("%s", pPrompt);
+	}
+}
+
+/*******************************************************************************
+* Function Name  	: ParseArgs
+* Description    	: 命令参数预处理
+* Input          	: cmdline -- 命令行命令
+					  argv    -- 命令行参数
+* Output         	: None
+* Return         	: 返回命令行命令的字符数
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static int ParseArgs( char* cmdline, char** argv )
+{
+#define STATE_WHITESPACE 0
+#define STATE_WORD 1
+
+	char* c;
+	int state = STATE_WHITESPACE;
+	int i;
+
+	i = 0;
+
+	if (strlen( cmdline ) == 0)
+	{
+		return i;
+	}
+
+	/* convert all tabs into single spaces */
+	c = cmdline;
+	while (*c != '\0')
+	{
+		if (*c == '\t')
+		{
+			*c = ' ';
+		}
+
+		c++;
+	}
+
+	c = cmdline;
+
+	/* now find all words on the command line */
+	while (*c != '\0')
+	{
+		if (state == STATE_WHITESPACE)
+		{
+			if ((*c != ' ') && (i < MAX_ARGS))
+			{
+				argv[i] = c;        //make argv[i] point to c
+				i++;
+				state = STATE_WORD;
+			}
+		}
+		else
+		{
+			/* state == STATE_WORD */
+			if (*c == ' ')
+			{
+				*c = '\0';
+				state = STATE_WHITESPACE;
+			}
+		}
+
+		c++;
+	}
+
+	return i;
+#undef STATE_WHITESPACE
+#undef STATE_WORD
+}
+
+/*******************************************************************************
+* Function Name  	: GetCmdMatche
+* Description    	: 查找匹配命令
+* Input          	: cmdline -- 命令行命令
+* Output         	: None
+* Return         	: -1:无匹配命令;  不等于-1:命令数组的偏移值
+* Author			: 	
+* Others			: None
+********************************************************************************/
+int GetCmdMatche( const char* cmdline )
+{
+	int i;
+
+	for (i = 0; pCMD[i].cmd != NULL; i++)
+	{
+		if (strlen( cmdline ) != strlen( pCMD[i].cmd ))
+		{
+			continue;
+		}
+
+		if (strncmp( pCMD[i].cmd, cmdline, strlen( pCMD[i].cmd )) == 0)
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+/*******************************************************************************
+* Function Name  	: RunCommand
+* Description    	: 后台命令处理，调用命令处理函数
+* Input          	: cmdline -- 命令行命令
+* Output         	: None
+* Return         	: 0:有相应处理函数;  -1:没有查到匹配命令处理函数
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void RunCommand(const char* cmdline)
+{
+	int i;
+	int argc, num_commands;
+	char * argv[MAX_ARGS];
+	static char temp_cmd_line[MAX_CMD_LEN] = {0};
+
+	i = 0;
+	while (cmdline[i] != '\0')
+	{
+		temp_cmd_line[i] = cmdline[i];
+		i++;
+	}
+
+	temp_cmd_line[i] = '\0';
+	argc = ParseArgs( temp_cmd_line, argv );
+
+	/* only whitespace */
+	if (argc == 0)
+	{
+		return;
+	}
+
+	num_commands = GetCmdMatche( argv[0] );
+	if (num_commands < 0)
+	{
+		CommandHook( argc, argv );
+	}
+	else if (pCMD[num_commands].proc != NULL)
+	{
+		pCMD[num_commands].proc( argc, argv );
+	}
+
+	return;
+}
+
+/**************************************************************************************************
+* Function Name  	: CommandHook
+* Description    	: 打印信息，提示找不到命令
+* Input          	: int argc , char * argv[]
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void CommandHook(int argc, char *argv[])
+{
+	DRV_Printf( "No '%s' command, please type 'help' or '?' for a command list.\n",
+		argv[0] );
+}
