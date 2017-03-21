@@ -1,0 +1,147 @@
+/*******************************************************************************
+* Function Name  	: ProcQueryFileType
+* Description    	: 处理主机下发的查询文件类型列表命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+static void ProcQueryFileType(u8 *pu8RecvMsg)
+{
+
+}
+
+/*******************************************************************************
+* Function Name  	: ProcClearAlarm
+* Description    	: 处理主机下发的查询告警清除命令
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+static void ProcClearAlarm(u8 *pu8RecvMsg)
+{
+
+}
+
+/*******************************************************************************
+* Function Name  	: ProcDataTransparentTransfer
+* Description    	: 处理主机下发的数据透传命令
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: 主机下发的数据格式为
+*                   1byte    1byte   1byte     1byte     2byte     2byte     nbyte                                        2byte  
+*                   地址位   功能码  子功能码  数据长度  软件标识  数据长度  Data(设备网络地址(2byte) + Data (N-2 byte))  crc   
+********************************************************************************/
+static void ProcDataTransparentTransfer(u8 *pu8RecvMsg)
+{
+    // 测试数据: 00 41 20 0B 01 08 00 00 FF FF 00 01 02 03 04 05 50 E3 -- IBAT的广播数据帧
+    DRV_Printf("ProcDataTransparentTransfer start .. \n");
+
+    BOOL bNetStatus = 0;                    // 当前Zigbee设备的无线网络状态
+    afAddrType_t SendDstAddr;               // 与当前设备进行通信的设备目的地址
+    u8  u8Option = AF_DISCV_ROUTE;          // 操作选项
+    u16 u16SoftWareId = 0;                  // 设备类型(无线电表或是IBAT)
+    u16 u16ClusterId = 0;                   // 设备的簇ID -- 与设备类型一一对应
+    u16 u16NetAddr = 0;                     // 设备的通信网络地址(广播模式时网络地址均为0xFFFF)
+    u8  u8TransID = 0;                      // 透传ID
+    u8  u8DataLen = 0;                      // 将要发送的数据长度
+    u8 *pu8SendData = NULL;                 // 将要发送的数据的指针
+    u8 *pu8TmpData = NULL;
+    u16 u16DevDataLen = 0;
+    u8  u8Ret = 0;
+
+    // TODO: 解析透传数据之前，判断下当前Zigbee设备的无线网络状态，再决定要不要发送数据 !!
+    /*
+    if (DATA_GetSigValue(u16 u16SigId, DATA_SIGNAL_U * puSigValue))
+    {
+        return ;
+    }
+    */
+
+    u8DataLen = pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DATA_LEN_INDEX];
+    
+    // 申请内存
+    pu8TmpData = (u8 *)DynMemGet(u8DataLen);
+    if (pu8TmpData == NULL)
+    {
+        DRV_Printf("pu8TmpData Mem get failed!\n");
+        return ;
+    }
+
+    // 透传数据长度不包含设备网络地址(2byte)
+    u8DataLen = u8DataLen - 2;
+
+    // 保存透传数据的指针
+    pu8SendData = pu8TmpData;
+
+    // 取出设备的数据长度减去2
+    u16DevDataLen = BUILD_UINT16(pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_DATA_LEN_INDEX + 1], 
+                                 pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_DATA_LEN_INDEX]) - 2;
+    //DRV_Printf("u16DevDataLen: %d\n", u16DevDataLen);
+
+    // 取出设备的SoftWareId进行判断，如果是无线电表类型的设备，需要将软件ID打包进透传数据
+    // 如果是IBAT类型的设备，则不需要将软件ID打包进透传数据
+    u16SoftWareId = BUILD_UINT16(pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_SOFTWARE_ID_INDEX + 1],
+                                 pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_SOFTWARE_ID_INDEX]);
+
+    if (u16SoftWareId == ZIGBEE_GENERAL_CLUSTER_ID)                     // Zigbee通用命令ID
+    {
+        u16ClusterId = IBAT_ZIGBEE_CLUSTER;
+    }
+    else if (u16SoftWareId == IBAT_SOFTWARE_ID)                         // 设备类型为IBAT
+    {
+        u16ClusterId = IBAT_CLUSTER_ID;
+    }
+    else if (u16SoftWareId == WIRELESS_ELECTRICITY_METER_SOFTWARE_ID)   // 设备类型为无线电表
+    {
+        u16ClusterId = WIRELESS_ELECTRICITY_METER_CLUSTER_ID;
+    }
+
+    // 重新打包设备真正的数据进透传数据中
+    (void *)memcpy(pu8TmpData, &pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_DATA_INDEX], u16DevDataLen); 
+
+    // 获取设备的网络地址
+    u16NetAddr = BUILD_UINT16(pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_NET_ADDR_INDEX + 1], 
+                              pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_NET_ADDR_INDEX]);
+
+    //DRV_Printf("u16NetAddr: 0x%X\n", u16NetAddr);
+    
+    // 判断是广播模式还是单播模式
+    if(u16NetAddr == 0xFFFF)
+    {
+        SendDstAddr.addrMode = (afAddrMode_t)AddrBroadcast;     // 广播模式
+        SendDstAddr.addr.shortAddr = 0xFFFF;
+    }
+    else
+    {
+        SendDstAddr.addrMode = (afAddrMode_t)Addr16Bit;         // 单播模式
+        SendDstAddr.addr.shortAddr = u16NetAddr;
+        u8Option = u8Option | AF_ACK_REQUEST;
+    }
+    SendDstAddr.endPoint = g_stZigbeeEndPointDesc.endPoint;
+
+    // Zigbee无线发送数据
+    // TODO: 注意! 如果增加了无线电表设备，g_stZigbeeEndPointDesc内部的参数需要增加无线电表的Cluster ID
+    u8Ret = AF_DataRequest(&SendDstAddr, &g_stZigbeeEndPointDesc,
+                           u16ClusterId,
+                           (byte)u16DevDataLen,
+                           (byte *)pu8SendData,
+                           &u8TransID,
+                           u8Option, AF_DEFAULT_RADIUS);
+
+    ProcDataTransparentTransferReply(pu8RecvMsg);
+    
+    // 释放内存 -- 将内存归还给"动态内存"块
+    DynMemFree(pu8TmpData);
+    pu8TmpData = NULL;
+
+    // 此处发送空主要是为了解决接收中断产生一次后，不发送数据则无法继续接收中断数据的问题
+    //DRV_RS485Send("  ", 2);
+    
+    DRV_Printf("ProcDataTransparentTransfer stop .. \n");
+}
