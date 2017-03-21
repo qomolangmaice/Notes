@@ -1,0 +1,189 @@
+/****************************************************************************
+File name: 		Shell.c
+Author: 		
+Version: 		V1.0    Date: 
+Description:  	SHELL后台函数实现
+Others: 		无
+History:
+****************************************************************************/
+/*********************  系统级别的相关头文件    ***************/
+#include "math.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
+
+/*********************  bsp提供的相关头文件    ***************/
+#include "BspConfig.h"
+#include "watchdog.h"
+/*********************  驱动提供的相关头文件    ***************/
+#include "InnerAdc.h"
+#include "DriverPublic.h"
+#include "InnerUart.h"
+#include "InnerFlash.h"
+#include "InnerTimer.h"
+
+/*********************  内部声明的相关头文件    ***************/
+#include "AppPublic.h"
+#include "Shell.h"
+
+//开发调试阶段使用的，正式版本需要去掉
+#if TEST_SHELL_ENABLE
+static void WriteE2Data(int argc, char *argv[]);
+#endif
+#define IN_FLASH_TEST_LEN	16
+
+static void ShellGetVersion(int argc, char *argv[]);
+//SHELL后台命令
+static void ReSet(int argc, char *argv[]);
+
+static void GetBatVoltage(int argc, char *argv[]);
+
+static void GetPCBVoltage(int argc, char *argv[]);
+
+static void GetSingleDialSwitchStatus(u8 u8Port, u8 u8KeyNum);
+static void GetDialSwitchStatus(int argc, char *argv[]);
+
+static void RS485SendString(int argc, char *argv[]);
+static void OpenNwk(int argc, char *argv[]);
+static void ReadFlashData(int argc, char * argv []  );
+
+const CMD_MENU CMD_TOP_MENU[] =
+{
+    {"getpcbvol",	"Get PCB Voltage",					    GetPCBVoltage                        },
+	{"help",	    "Show this list",						DRV_ShellHelp                        },
+	{"?",			"= help",								DRV_ShellHelp                        },
+	{"reset",		"Reset the board.",                   	ReSet								 },    
+	{"exit",		"Return to last menu",                	DRV_ShellExit                        },
+    {"readf",		"Read Flash",							ReadFlashData						 },
+    {NULL,			 NULL,									NULL								 }
+};
+
+/**************************************************************************************************
+Function: 	ReadFlashData
+Description:读取片外FLASH的数据
+Input: 		None
+Output: 	None
+Returns: 	None
+Author: 	
+Others: 	None
+***************************************************************************************************/
+static void ReadFlashData(int argc, char * argv []  )
+{
+	u16 i = 0;
+	u8 au8DataRead[IN_FLASH_TEST_LEN] = {0};
+	u8 u8FlashType = 0;
+	u32 u32Addr = 0;
+	u32 u32Cnt = 0;
+	if (3 == argc)
+	{
+		u32Addr = atoi(argv [1]);
+		u32Cnt = atoi(argv [2]);
+
+		for (i = 0; i < u32Cnt; i++)
+		{
+			((BOOL)DRV_FlashRead(u32Addr, au8DataRead, IN_FLASH_TEST_LEN));
+			DRV_Printf("\n");
+			DRV_Printf("%X:", u32Addr);
+			for (u16 j = 0; j < IN_FLASH_TEST_LEN; j++)
+			{
+				DRV_Printf("%x ", au8DataRead[j]);
+			}
+			i += IN_FLASH_TEST_LEN;
+			u32Addr += IN_FLASH_TEST_LEN;
+		}
+		DRV_Printf("\n");
+	}
+}
+
+/**************************************************************************************************
+Function: 	 GetPCBVoltage
+Description: 获取PCB电路对应电压
+Input: 		 int argc , char *argv[]
+Output: 	 None
+Returns: 	 None
+Author: 	
+Others: 	 None
+***************************************************************************************************/
+static void GetPCBVoltage(int argc, char *argv[])
+{
+    u32 u32PCBVoltage;
+    u16 u16PCBVolCode = 0;
+	DATA_SIGNAL_U uPCBVol;
+    
+	if ((argc == 2)
+		&& (0 == strcmp("?", argv [1])))
+	{
+		DRV_Printf("Usage:Get PCB Voltage\n");
+		return;
+	}
+    
+    DRV_SetAdRef(ADC_REF_AVDD);
+    u16PCBVolCode = DRV_GetPollableAdcCode(ADC_ID_PCB_VERSION, ADC_POLLABLE_DOT_NUM);
+    DRV_Printf("u16PCBVolCode: %d \n", u16PCBVolCode);
+
+    uPCBVol.m_fValue = (float)((float)u16PCBVolCode *  0.00040283203125);
+    u32PCBVoltage = (u32)(uPCBVol.m_fValue  * 10000);
+	DRV_Printf("PCBVoltage: %d \n", u32PCBVoltage);
+}
+
+/**************************************************************************************************
+Function: 	 ShellGetVersion
+Description: 获取版本号
+Input: 		 int argc , char *argv[]
+Output: 	 None
+Returns: 	 None
+Author: 	
+Others: 	 None
+***************************************************************************************************/
+static void ShellGetVersion(int argc, char *argv[])
+{
+
+	DRV_Printf("PCB Version:  %c\n", g_BoardInfo.m_PcbVersion);
+	DRV_Printf("Soft Version: %d\n", g_BoardInfo.m_SoftwareVersion);
+	DRV_Printf("SoftWare Build Time: %s %s\n",  __DATE__, __TIME__);	/* 软件编译日期 */
+}
+
+/**************************************************************************************************
+Function: 	 ReSet
+Description: 单板复位命令处理
+Input: 		 int argc , char *argv[]
+Output: 	 None
+Returns: 	 static void
+Author: 	
+Others: 	 None
+***************************************************************************************************/
+static void ReSet(int argc, char *argv[])
+{
+	if (SYS_MODE_ETEST != g_u16SystemMode)
+	{
+		DRV_Printf("Rebooting......\n");
+		ResetBoard();
+	}
+	else
+	{
+		DRV_Printf("Board can not be rebooted manually under e-test mode.\n");
+		DRV_Printf("Please try e-test reset command.\n");
+	}
+}
+
+/**************************************************************************************************
+Function: 	 APP_ShellTask
+Description: 运行后台任务
+Input: 		 None
+Output: 	 None
+Returns: 	 None
+Author: 	
+Others: 	 None
+***************************************************************************************************/
+void APP_ShellTask( void )
+{
+    s32 key;
+
+    key = DRV_ShellGetChar();
+    if (-1 == key)
+    {
+        return;
+    }
+
+	DRV_ShellProcRecvKey(key);
+}
