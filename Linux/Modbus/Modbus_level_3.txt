@@ -1,0 +1,304 @@
+/**************************************************************************************************
+Function: 	 SaveBoardElabelHead
+Description:  写入单板的电子标签帧头信息到Flash
+Input: 		 usLength -- 电子标签长度
+			 usCrc    -- 电子标签CRC校验值
+Output: 	      None
+Returns: 	 None
+Author: 	      None
+Others: 	
+***************************************************************************************************/
+static void SaveBoardElabelHead(u16 usLength, u16 usCrc)
+{
+	u8 i;
+	u8 ucElabelInf[BOARD_ELABEL_HEAD_LENGTH];
+
+	/* 生成ElabelHead二字节头，及表示电子标签长度的字节 */
+	ucElabelInf[0] = 'a';
+	ucElabelInf[1] = 'A';
+	ucElabelInf[2] = *(((u8*)(&usLength)) + 1);
+	ucElabelInf[3] = *((u8*)(&usLength));
+    ucElabelInf[4] = *(((u8*)(&usCrc)) + 1);
+    ucElabelInf[5] = *((u8*)(&usCrc));
+
+	for (i = 6; i < 15; i++)
+	{
+		ucElabelInf[i] = 0xFF;
+	}
+
+	ucElabelInf[15] = 0x00;
+	for (i = 0; i < 15; i++)
+	{
+		ucElabelInf[15] += ucElabelInf[i];
+	}
+
+	PrintFrameData(BOARD_ELABEL_HEAD_LENGTH, ucElabelInf);
+
+	DRV_FlashWrite(ELABEL_HEAD_ADDR, BOARD_ELABEL_HEAD_LENGTH, ucElabelInf);
+}
+
+
+/**************************************************************************************
+* Function Name  	: ProcLoadFinish
+* Description    	: 处理主机下发的加载文件结束命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/15
+* Others			: 主机下发的数据格式为:
+*                   1byte    1byte     1byte      1byte      1byte      2byte    2byte
+*                   地址位    功能码    子功能码   数据长度    文件类型    文件CRC  crc  
+****************************************************************************************/
+static void ProcLoadFinish(u8 *pu8RecvMsg)
+{
+    DRV_Printf("ProcLoadFinish start... \n");
+    // 测试数据: 00 41 0C 01 90 F1 C3
+    u8  u8FileType = 0;
+    u16 u16FileCRC = 0;
+
+    // 1.文件加载未启动
+	if ((LOAD_DATA != g_stLoadFile.m_u8ProcessState)
+        &&(LOAD_END != g_stLoadFile.m_u8ProcessState))
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_END_ERR1;
+		return;
+	}
+	
+	// 2.校验数据长度
+	if (LOAD_END_DATA_LEN != pu8RecvMsg[LOAD_END_DATA_LEN_INDEX])
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_END_ERR2;
+		return;
+	}
+
+	// 3.校验文件类型
+	if (pu8RecvMsg[LOAD_END_FILE_TYPE_INDEX] != g_stLoadFile.m_u8FileType)
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_END_ERR3;
+		return ;
+	} 
+
+	DRV_Printf("m_u32FileSize: %d, m_u16FileCRC: %X\n", g_stLoadFile.m_u32FileSize, g_stLoadFile.m_u16FileCRC);
+	
+	// 3.1 如果加载文件类型为电子标签，则将电子标签头写入到Flash
+	if (pu8RecvMsg[LOAD_END_FILE_TYPE_INDEX] == BOARD_ELABEL_FILE)
+	{
+	    SaveBoardElabelHead((u16)g_stLoadFile.m_u32FileSize, g_stLoadFile.m_u16FileCRC);
+	    DRV_Printf("SaveBoardElabelHead Done!\n");
+	}
+
+	// 4.校验文件CRC
+	u16FileCRC = BUILD_UINT16(pu8RecvMsg[LOAD_END_FILE_CRC_INDEX + 1], 
+	                          pu8RecvMsg[LOAD_END_FILE_CRC_INDEX]);
+
+    DRV_Printf("u16FileCRC = %X, m_u16FileCRC = %X\n", u16FileCRC, g_stLoadFile.m_u16FileCRC);
+    if (u16FileCRC != g_stLoadFile.m_u16FileCRC)
+    {
+		g_stModbusRxMsg.m_eErrorType = LOAD_END_ERR4;
+		return;
+	}
+
+	ProcLoadFinishReply();
+
+    // 文件加载的帧序号清空
+	g_stLoadFile.m_u16CurFrameSeqNum = 0;
+
+    // 文件加载激活标志使能
+	g_stLoadFile.m_bActivateAble = TRUE;
+	// 文件加载状态改为加载激活态
+	g_stLoadFile.m_u8ProcessState = LOAD_ACTIVE;
+	
+    DRV_Printf("ProcLoadFinish stop... \n");
+}
+
+/*************************************************************************************
+* Function Name  	: ProcLoadDataActivate
+* Description    	: 处理主机下发的激活版本命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: 主机下发的数据格式为:
+*                   1byte    1byte     1byte      1byte      1byte      2byte
+*                   地址位   功能码     子功能码    数据长度   文件类型    crc  
+**************************************************************************************/
+static void ProcLoadDataActivate(u8 *pu8RecvMsg)
+{
+    DRV_Printf("ProcLoadDataActivate start... \n");
+    BOARD_APP_UPDATE_SOFTWARE_INFO_ST s_AppUpdateInfo;
+    // 测试数据: 00 41 0C 01 90 F1 C3
+
+    // 1.文件加载未启动, 或者文件加载激活标志为FALSE
+	if ((LOAD_ACTIVE != g_stLoadFile.m_u8ProcessState) && 
+	    (TRUE != g_stLoadFile.m_bActivateAble))
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_ACTIVE_ERR1;
+		return;
+	}
+    
+	// 2.校验数据长度
+	if (LOAD_ACTIVE_DATA_LEN != pu8RecvMsg[LOAD_ACTIVE_DATA_LEN_INDEX])
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_ACTIVE_ERR2;
+		return;
+	}
+
+	// 3.校验文件类型
+	if (pu8RecvMsg[LOAD_ACTIVE_FILE_TYPE_INDEX] != g_stLoadFile.m_u8FileType)
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_ACTIVE_ERR3;
+		return ;
+	} 
+
+	if (BOARD_APP_FILE != pu8RecvMsg[LOAD_ACTIVE_FILE_TYPE_INDEX])
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_ACTIVE_ERR4;
+		return ;
+	}
+
+	// 4.初始化升级标志位结构体
+	memset(&s_AppUpdateInfo, 0xFF, sizeof(s_AppUpdateInfo));
+	memcpy(&s_AppUpdateInfo.m_u8UpdateAppFlag[0], s_LoadBoardAppToInnerFlashFlag, BOARD_UPDATE_APP_FLAG_LEN);
+
+	// 5.向Flash中写入升级标志位结构体(这块Flash区域在写文件头时已擦除)
+	if (TRUE != DRV_FlashWrite(UPDATEFLAG_START_ADDR, sizeof(s_AppUpdateInfo), (u8*)(&s_AppUpdateInfo)))
+	{
+		DRV_Printf("Update Flag write error!\n");
+	}
+
+    ProcLoadDataActivateReply();
+    
+	//单板热复位，需添加热复位函数
+	ResetBoard();
+}
+
+/*******************************************************************************
+* Function Name  	: ProcQueryActivateProgress
+* Description    	: 处理主机下发的查询激活进度命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+static void ProcQueryActivateProgress(u8 *pu8RecvMsg)
+{
+    // 此需求待定
+}
+
+/*******************************************************************************
+* Function Name  	: ProcQueryVersion
+* Description    	: 处理主机下发的查询版本命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+static void ProcQueryVersion(u8 *pu8RecvMsg)
+{
+    // 此需求待定
+}
+
+/*******************************************************************************
+* Function Name  	: GetFileUploadInfo
+* Description    	: 获取文件上传的基本信息，用于回复主机 
+* Input          	: u8FileType        -- 上传文件类型
+*                   u32FlashStartAddr -- 上传文件的起始读取地址
+*                   u32FlashEndAddr   -- 上传文件的终止读取地址
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/14
+* Others			: None
+********************************************************************************/
+static void GetFileUploadInfo(u8 u8FileType, u32 u32FlashStartAddr, u32 u32FlashEndAddr)
+{
+    u32 u32ElabelLen = 0;
+    u16 u16ElabelCrc = 0;
+    
+    u32 u32FileSize = 0;
+    u32 u32FileSizeTmp = 0;
+    u16 u16FileCRC = 0xFFFF;
+    u8 u8FrameSize = 0;
+    u32 u32RecStartAddr = 0; 
+    u8 *pu8Buf = NULL;
+    int i = 0;
+
+    ReadBoardElabelHead((u16 *)&u32ElabelLen, &u16ElabelCrc);
+
+    DRV_Printf("u32ElabelLen: %d, u16ElabelCrc: %X\n", u32ElabelLen, u16ElabelCrc);
+
+    // 根据Flash的起始地址与终止地址计算Flash中的存储的文件大小
+    u32FileSize = u32FlashEndAddr - u32FlashStartAddr;
+
+    // 电子标签文件的最后一帧数据帧长度有可能不被4整除
+    if (u8FileType == BOARD_ELABEL_FILE)
+    {
+        u32FileSize = u32ElabelLen;
+        if (u32FileSize % 4 != 0)
+        {
+            // 补u32FileSize为4的倍数
+            u32FileSize = u32FileSize + (4 - u32FileSize % 4);
+        }
+    }
+
+    DRV_Printf("u32FileSize: %d\n", u32FileSize);
+
+    // 计算上传文件时的帧大小
+    // u32FileSize必须被4整除，而且能被等分，并且等分后的值小于等于119
+    i = 2;  // 至少等分为2帧
+    while (((u32FileSize / i) > MDS_FILE_UPLOAD_MAX_FRAME_LEN) ||
+        (u32FileSize % i != 0) || (u32FileSize % 4 != 0))
+    {
+        i++;
+        if(i == u32FileSize)
+        {
+            DRV_Printf("No valid value found\n");
+            return ;
+        }
+    }
+    u8FrameSize = u32FileSize / i;
+
+    DRV_Printf("i: %d, u8FrameSize: %d\n", i, u8FrameSize);
+
+    pu8Buf = DynMemGet(u8FrameSize);
+    if (pu8Buf == NULL)
+    {
+        DRV_Printf("GetUploadInfo DynMemGet failed!\n");
+    }
+
+    // 计算整个上传文件的CRC
+    i = 0;
+    u32RecStartAddr = u32FlashStartAddr;
+    do {
+        if (!DRV_FlashRead(u32RecStartAddr, pu8Buf, u8FrameSize))
+        {
+            DRV_Printf("GetUploadInfo read flash error!\n");
+            return ;
+        }
+
+        u16FileCRC = CalcUsaCrc16ByFunc(pu8Buf, u8FrameSize, u16FileCRC);
+
+        u32RecStartAddr += u8FrameSize;
+        i += u8FrameSize;
+    } while (i < u32FileSize);
+    
+    g_stUploadFile.m_u8FileType = u8FileType;
+    g_stUploadFile.m_u8FrameSize = u8FrameSize;
+    
+    if (u8FileType == BOARD_ELABEL_FILE)
+    {
+        g_stUploadFile.m_u32FileSize = u32ElabelLen;
+        g_stUploadFile.m_u16FileCRC  = u16ElabelCrc;
+    }
+    else
+    {
+        g_stUploadFile.m_u32FileSize = u32FileSize;
+        g_stUploadFile.m_u16FileCRC  = u16FileCRC;
+    }
+
+    DRV_Printf("m_u32FileSize: %d, m_u16FileCRC: %X\n", g_stUploadFile.m_u32FileSize, g_stUploadFile.m_u16FileCRC);
+
+    DynMemFree(pu8Buf);
+    pu8Buf = NULL;
+}
