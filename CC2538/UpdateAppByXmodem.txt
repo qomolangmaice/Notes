@@ -1,0 +1,43 @@
+/**************************************************************************************************
+Function: 	 UpdateAppByXmodem
+Description: Xmodem模式下升级APP
+Input: 		 None
+Output: 	 None
+Returns: 	 None
+Author: 	
+Others: 	 None
+***************************************************************************************************/
+void UpdateAppByXmodem(void)
+{
+    u8 u8RecKey;
+    u16 i = 0;
+
+    g_stRecCom.m_u16Pend = 0;
+    g_stRecCom.m_u16Ptart = 0;
+    for(i = 0; i < BUF_SIZE; i++)
+    {
+        g_au8RecDataBuf[i] = 0xff;
+    }
+
+    WatchdogClear();
+    DRV_Printf("\nPress Esc key to update your APP!");
+
+    //1-->等待获取按键动作
+    u8RecKey = XmodemGetKey();
+    if(u8RecKey != RUN_APP)//若用户按下ESC键
+    {
+        DRV_Printf("\nPlease Download your APP:\n>");
+    }
+    else
+    {
+        DRV_Printf("\r\nNo APP need to be updated.");
+        DRV_Printf("\r\nQuit Xmodem update mode.");
+        JumpToApp(g_stHeaderPtr->m_u32VectorTableAddress);
+    }
+
+    //2-->等待XMODEM下载文件
+    if(WaitXmodem()!=XMODEM_OK)
+    {
+        while(1){}
+    }
+}
