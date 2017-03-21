@@ -1,422 +1,437 @@
-/*******************************************************************************
-* Function Name  	: ProcMbReadRegMsg
-* Description    	: 处理主机下发的读寄存器命令(采集信号)
-* Input          	: None
+
+/*****************************************************************************
+* Function Name  	: ProcFileUploadStart
+* Description    	: 处理主机下发的上传文件启动命令 
+* Input          	: pu8RecvMsg -- 消息数据
 * Output         	: None
 * Return         	: None
-* Author			: 
-* Others			: pu8RecvMsg的数据格式为:
-*                   1byte    1byte      2byte           2byte        2byte  
-*                   地址位   功能码     寄存器起始地址  寄存器数目   crc  
-********************************************************************************/
-static void ProcMbReadRegMsg(u8 *pu8RecvMsg)
+* Author			: wwx423495     2017/3/14
+* Others			: 回复给主机的数据格式为
+*                   1byte    1byte     1byte      1byte      1byte     2byte
+*                   地址位   功能码     子功能码   数据长度    文件类型   crc  
+******************************************************************************/
+static void ProcFileUploadStart(u8 *pu8RecvMsg)
 {
-    // 读软件版本号测试数据: 00 03 00 00 00 01 85 DB
-    DRV_Printf("** ProcMbReadRegMsg start **\n");
-    g_stModbusRxMsg.m_u16AppRdRegNums = BUILD_UINT16(pu8RecvMsg[MDS_RD_REGS_NUM_INDEX + 1],
-                                                     pu8RecvMsg[MDS_RD_REGS_NUM_INDEX]);
+    DRV_Printf("ProcFileUploadStart start... \n");
+    
+    // 文件上传启动测试数据: 00 41 05 01 90 21 C1
+    u8  u8FileType = 0;
+	SIG_EXT_VAL uNewDataFlag;
+	RECORD_HEAD_TABLE st_RecInfoHead = {0};
 
-    // 寄存器个数是否超过上限
-    if (g_stModbusRxMsg.m_u16AppRdRegNums > MAX_REG_NUM)
-    {
-        g_stModbusRxMsg.m_u16AppRdRegNums = 0;
-        g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
-        return;
-    }
+    // 校验数据长度
+	if (UPLOAD_START_DATA_LEN != pu8RecvMsg[UPLOAD_START_DATA_LEN_INDEX])
+	{
+		g_stModbusRxMsg.m_eErrorType = UPLOAD_START_ERR1;
+		return;
+	}
 
-    // 记录主机要查询的寄存器起始地址和寄存器个数，以便回复
-    g_stModbusRxMsg.m_u16AppRdRegStarAddr = BUILD_UINT16(pu8RecvMsg[MDS_RD_REG_ST_ADDR_INDEX + 1],
-                                                         pu8RecvMsg[MDS_RD_REG_ST_ADDR_INDEX]);
-
-    if (TRUE == bModbusFindInRegAddrValTab(g_stModbusRxMsg.m_u16AppRdRegStarAddr,
-                                           g_astNorthMdRdRegsTable,
-                                           ITEM_OF(g_astNorthMdRdRegsTable)))
-    {
-        // 采集信号的命令字正确校验后，打包回复命令
-        NorthModbusPackSigIdReply();
-    }
-    else
-    {
-        g_stModbusRxMsg.m_eErrorType = ERROR_ADDRESS;
-    }
-    DRV_Printf("** ProcMbReadRegMsg stop **\n");
-}
-
-/*******************************************************************************
-* Function Name  	: ProcMbWriteSingleRegMsg
-* Description    	: 处理主机下发的写单个寄存器命令
-* Input          	: None
-* Output         	: None
-* Return         	: None
-* Author			: 
-* Others			: pu8RecvMsg的数据格式为:
-*                   1byte    1byte      2byte       2byte      2byte  
-*                   地址位   功能码     寄存器地址  寄存器值   crc  
-********************************************************************************/
-static void ProcMbWriteSingleRegMsg(u8 *pu8RecvMsg)
-{
-    DRV_Printf("** ProcMbWriteSingleRegMsg start **\n");
-    // 开启组网测试数据: 00 06 C0 11 00 01 25 DE
-    // 关闭组网测试数据: 00 06 C0 11 00 00 E4 1E
-    // 单板复位测试数据: 00 06 C1 00 A5 A5 0E CC
-    // 擦除网络参数测试数据: 00 06 C1 01 A5 A5 5F 0C
-    u16 i;
-    u8  u8ReadRegNum = 0;
-    u16 u16RegStartAddr;
-    SIG_EXT_VAL stSetSig = {0};
-
-    SIG_EXT_VAL stSetSigTmp = {0};
-
-    // 记录主机要设置的寄存器起始地址和寄存器个数，以便回复
-    g_stModbusRxMsg.m_u16AppRdRegStarAddr = BUILD_UINT16(pu8RecvMsg[MDS_SINGLE_WD_REG_ADDR_INDEX + 1],
-                                                         pu8RecvMsg[MDS_SINGLE_WD_REG_ADDR_INDEX]);
-
-    u16RegStartAddr  = g_stModbusRxMsg.m_u16AppRdRegStarAddr;
-
-    DRV_Printf("u16RegStartAddr: 0x%X\n", u16RegStartAddr);
-
-    // 遍历写单个寄存器信号映射表
-    for (i = 0; i < ITEM_OF(g_stNorthMdWdSingleRegTable); i++)
-    {
-        // 找到对应的寄存器地址
-        if (u16RegStartAddr == g_stNorthMdWdSingleRegTable[i].m_u16RegAddr)
-        {
-            // stSetSig 取出了写单个寄存器信号对应的寄存器的值
-            u8ReadRegNum = GetSetRegVal(pu8RecvMsg, u16RegStartAddr, &stSetSig, 0, MDS_SINGLE_WD_REG_VAL_INDEX);
-
-            // 写单个寄存器命令,只设置单个寄存器
-            if (u8ReadRegNum >= 2)
-            {
-                g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
-                break;
-            }
-
-            Modbus_GetSigVal(u16RegStartAddr, &stSetSigTmp);
-            DRV_Printf("ProcMbWriteSingleRegMsg -- before set val: 0x%X\n", stSetSigTmp.uSigVal.u16Val);
-
-            Modbus_SetSigVal(u16RegStartAddr, &stSetSig);
-
-            Modbus_GetSigVal(u16RegStartAddr, &stSetSigTmp);
-            DRV_Printf("ProcMbWriteSingleRegMsg -- after  set val: 0x%X\n", stSetSigTmp.uSigVal.u16Val);
-
-            // 更新信号对应的寄存器值配置表，并执行信号对应的功能函数
-            if (!Modbus_SetSigVal(u16RegStartAddr, &stSetSig) ||
-                !(g_stNorthMdWdSingleRegTable[i].m_pFunc(pu8RecvMsg)))
-            {
-                g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
-            }
-
-            break;
-        }
-    }
-
-    if (i >= ITEM_OF(g_stNorthMdWdSingleRegTable))
-    {
-        // 寄存器地址没有找到
-        g_stModbusRxMsg.m_eErrorType = ERROR_ADDRESS;
-    }
-
-    if (DATA_OK == g_stModbusRxMsg.m_eErrorType)
-    {
-        NorthModbusPackAndSendWdReply(pu8RecvMsg);
-    }
-    DRV_Printf("** ProcMbWriteSingleRegMsg stop **\n");
-}
-
-/*******************************************************************************
-* Function Name  	: ProcMbWriteMultiRegMsg
-* Description    	: 处理主机下发的写多个寄存器命令 
-* Input          	: None
-* Output         	: None
-* Return         	: None
-* Author			: 
-* Others			: pu8RecvMsg的数据格式为:
-*                   1byte    1byte      2byte        2byte       1byte   nbyte     2byte  
-*                   地址位   命令类型   寄存器地址   寄存器个数  字节数  寄存器值   crc  
-********************************************************************************/
-static void ProcMbWriteMultiRegMsg(u8 *pu8RecvMsg)
-{
-
-}
-
-/*******************************************************************************
-* Function Name  	: ProcMbReadEquipID
-* Description    	: 处理主机下发的设备识别码(获取设备类型和版本号)读取命令
-* Input          	: None
-* Output         	: None
-* Return         	: None
-* Author			: 
-* Others			: None
-********************************************************************************/
-static void ProcMbReadEquipID(u8 *pu8RecvMsg)
-{
-
-}
-
-/*******************************************************************************
-* Function Name  	: ProcMbManage
-* Description    	: 处理主机下发的管理命令 -- 包括加载、文件传输、查询、消息透传等命令
-* Input          	: None
-* Output         	: None
-* Return         	: None
-* Author			: 
-* Others			: 数据格式为
-*                   1byte    1byte     1byte      1byte      nbyte   2byte  
-*                   地址位   功能码     子功能码    数据长度   data    crc    
-********************************************************************************/
-static void ProcMbManage(u8 *pu8RecvMsg)
-{
-    DRV_Printf("ProcMbManage start .. \n");
-    u16 i;
-    u8  u8ReadRegNum = 0;
-    u16 u16AppSubCmd;
-
-    // 记录主机发过来的消息的子功能码，以便回复
-    g_stModbusRxMsg.m_u8AppChildCmd = pu8RecvMsg[MDS_MANAGE_CHILD_CMD_INDEX];
-
-    u16AppSubCmd  = g_stModbusRxMsg.m_u8AppChildCmd;
-
-    // 遍历子功能码列表，执行对应子功能码命令函数
-    for (i = 0; i < ITEM_OF(g_stNorthMbChildCmdTable); i++)
-    {
-        if (u16AppSubCmd == g_stNorthMbChildCmdTable[i].m_u8Cmd)
-        {
-            g_stModbusRxMsg.m_eErrorType   = DATA_OK;
-            g_stNorthMbChildCmdTable[i].m_pFunc(pu8RecvMsg);
-
-            /* 收到有效命令, 将通信失败定时器置起 */
-            //g_CommInfoSt[COMM_485].u8CommFailCont = TASK_30S_PRE_1S;
-            break;
-        }
-        
-        //判断是否是无效的命令
-        if (ITEM_OF(g_stNorthMbChildCmdTable) == i)
-        {
-            g_stModbusRxMsg.m_eErrorType = ERROR_FUNC;
-        }
-    }
-
-    DRV_Printf("ProcMbManage stop .. \n");
-}
-
-/******************************************************************
- * Function     :   NorthModbusPackErrorReply
- * Description  :   北向modbus打包发送错误码回复给主机
- * Input        :   无
- * Output       :   无
- * Return       :   无
- * Others       :
-******************************************************************/
-static void NorthModbusPackErrorReply(void)
-{
-    DRV_Printf("** ErrorReply **\n");
-    u8  ucCrcIndex;
-    u32 u32EquipAddr = 0;
-
-    MSG_ST TmpTxMsg = {0};
-    TmpTxMsg.length= 0;
-    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
-
-    // 获取当前设备地址
-    u32EquipAddr = Get485EquipAddr();
+    // 无线数据文件测试用代码
+	//WriteDataIntoFlash();
+	//s_stCycRecTable[1].m_u32RecStartAddr = AF_COM_REC_START_ADDR;
+	//s_stCycRecTable[1].m_u32RecStopAddr  = AF_COM_REC_START_ADDR + 256;
 	
-    // 打包即将发送的数据包
-    TmpTxMsg.buf[MDS_RDREPLY_ADDR_INDEX] = u32EquipAddr;
-    TmpTxMsg.buf[MDS_RDREPLY_CMD_INDEX]  = g_stModbusRxMsg.m_u8AppCmd + 128;   // TODO: 此处待检视
-    TmpTxMsg.buf[MDS_RDREPLY_BYTE_NUMS_INDEX] = g_stModbusRxMsg.m_eErrorType;
+    // 根据文件类型，上传文件的Flash起始读取地址，上传文件的Flash终止读取地址
+    // 得到文件长度，数据帧长度，文件CRC
+    u8FileType = pu8RecvMsg[UPLOAD_START_FILE_TYPE_INDEX];
+    switch (u8FileType)
+    {
+    case BOARD_ELABEL_FILE:
+        g_stUploadFile.m_u32FlashReadStartAddr = ELABEL_DATA_ADDR;
+        g_stUploadFile.m_u32FlashReadEndAddr   = ELABEL_END_ADDR;
+        break;
+        
+    case WIRELESS_DATA_FILE:
+        //DRV_Printf("WIRELESS_DATA_FILE .. \n");
+		s_stCycRecTable[1].m_u32RecStopSide = s_stCycRecTable[1].m_u16CurrSide;
+		s_stCycRecTable[1].m_u32RecStopAddr = s_stCycRecTable[1].m_u32CurrAddr;
+		//DRV_Printf("ProcFileUploadStart -- m_u32RecStopSide = %d\n", s_stCycRecTable[1].m_u32RecStopSide);
+		//DRV_Printf("ProcFileUploadStart -- m_u32RecStopAddr = 0%X\n", s_stCycRecTable[1].m_u32RecStopAddr);
 
-    // 计算crc的位置
-    ucCrcIndex = MDS_RDREPLY_ADDR_LEN + MDS_RDREPLY_CMD_LEN + MDS_RDREPLY_BYTE_NUMS_LEN;
+		// 初始化文件加载的Flash读取起始地址和读取终止地址
+        g_stUploadFile.m_u32FlashReadStartAddr = s_stCycRecTable[1].m_u32RecStartAddr;
+        g_stUploadFile.m_u32FlashReadEndAddr   = s_stCycRecTable[1].m_u32RecStopAddr;
+        //DRV_Printf("ProcFileUploadStart -- m_u32RecStartAddr = 0%X\n", s_stCycRecTable[1].m_u32RecStartAddr);
+        
+		s_stCycRecTable[1].m_u16CurrSide = (s_stCycRecTable[1].m_u16CurrSide + 1) % s_stCycRecTable[1].m_u16QueueLen;
+		s_stCycRecTable[1].m_u32CurrAddr = s_stCycRecTable[1].m_u32SideStAddrQueue[s_stCycRecTable[1].m_u16CurrSide];
 
-    // 封装crc的值
-    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+		//DRV_Printf("ProcFileUploadStart -- m_u16CurrSide = %d\n", s_stCycRecTable[1].m_u16CurrSide);
+		//DRV_Printf("ProcFileUploadStart -- m_u32CurrAddr = 0%X\n", s_stCycRecTable[1].m_u32CurrAddr);
+		if (NULL != s_stCycRecTable[1].m_pEraseFunc)
+		{
+			s_stCycRecTable[1].m_pEraseFunc(s_stCycRecTable[1].m_u32CurrAddr, 
+			(s_stCycRecTable[1].m_u32SideEndAddrQueue[s_stCycRecTable[1].m_u16CurrSide] - 
+			s_stCycRecTable[1].m_u32SideStAddrQueue[s_stCycRecTable[1].m_u16CurrSide]));
+		}
 
-    // 更新发送数据长度
-    TmpTxMsg.length= ucCrcIndex + MDS_RDREPLY_CRC_LEN;
+		st_RecInfoHead.m_u16RecordId = 0;
+		s_stCycRecTable[1].m_u32CurrIndex++;
+		st_RecInfoHead.m_u32RecordIndex = s_stCycRecTable[1].m_u32CurrIndex;
+		st_RecInfoHead.m_u16Crc = CalcCcittCrc16ByTable((u16)CRC_INVALID, 
+		(u8*)&st_RecInfoHead, 
+		(sizeof(RECORD_HEAD_TABLE) - sizeof(u16)));
 
-    // 将要发送的消息添加到消息发送队列中
-    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+		s_stCycRecTable[1].m_pWriteFunc(s_stCycRecTable[1].m_u32SideStAddrQueue[s_stCycRecTable[1].m_u16CurrSide],
+		(sizeof(RECORD_HEAD_TABLE)),
+		(u8*)&st_RecInfoHead);
+		s_stCycRecTable[1].m_u32CurrAddr += sizeof(RECORD_HEAD_TABLE);
+ 		uNewDataFlag.uSigVal.u16Val = AF_DATA_REFRESH_FLAG_NO;
+ 		Modbus_SetSigVal((u16)MDS_REG_SIGNAL_WIRELESS_DATA_UPDATE_FLAG, &uNewDataFlag);
+        
+        break;
+    
+    case RUN_LOG_FILE:
+		s_stCycRecTable[0].m_u32RecStopSide = s_stCycRecTable[0].m_u16CurrSide;
+		s_stCycRecTable[0].m_u32RecStartAddr = s_stCycRecTable[0].m_u32CurrAddr;
+
+		// 初始化文件加载的Flash读取起始地址和读取终止地址
+        g_stUploadFile.m_u32FlashReadStartAddr =  s_stCycRecTable[0].m_u32RecStartAddr;
+        g_stUploadFile.m_u32FlashReadEndAddr   =  s_stCycRecTable[0].m_u32RecStartAddr;
+        
+		s_stCycRecTable[0].m_u16CurrSide = (s_stCycRecTable[0].m_u16CurrSide + 1) % s_stCycRecTable[0].m_u16QueueLen;
+		s_stCycRecTable[0].m_u32CurrAddr = s_stCycRecTable[0].m_u32SideStAddrQueue[s_stCycRecTable[0].m_u16CurrSide];
+        break;
+        
+    default:
+        g_stModbusRxMsg.m_eErrorType = UPLOAD_START_ERR2;
+        return ;
+    }
+    GetFileUploadInfo(u8FileType, g_stUploadFile.m_u32FlashReadStartAddr, g_stUploadFile.m_u32FlashReadEndAddr);
+
+	g_stUploadFile.m_u16MaxFrame  = g_stUploadFile.m_u32FileSize / g_stUploadFile.m_u8FrameSize;
+	if ( 0 != (g_stUploadFile.m_u32FileSize % g_stUploadFile.m_u8FrameSize) )
+	{
+		g_stUploadFile.m_u16MaxFrame++;
+	}
+	DRV_Printf("g_stUploadFile.m_u16MaxFrame = %d\n", g_stUploadFile.m_u16MaxFrame);
+
+    // 更新为下一个状态 -- 文件上传传输态
+    g_stUploadFile.m_u8ProcessState = LOAD_DATA;
+    
+    ProcFileUploadStartReply();
+
+    // 重新初始化文件计算CRC
+    g_stUploadFile.m_u16FileCRC = 0xFFFF;
+
+    DRV_Printf("ProcFileUploadStart stop... \n");
 }
 
-/*******************************************************************************
-* Function Name  	: ModbusRxMsgInterpret
-* Description    	: Modbus接收消息解析
-* Input          	: None
+/***************************************************************************************
+* Function Name  	: ProcFileUploadData
+* Description    	: 处理主机下发的上传文件数据命令 
+* Input          	: pu8RecvMsg -- 消息数据
 * Output         	: None
 * Return         	: None
-* Author			: 
-* Others			: 数据格式为:
-*                   1byte    1byte      1byte      nbyte   2byte  
-*                   地址位   功能码     数据长度   data    crc   
-********************************************************************************/
-static void ModbusRxMsgInterpret(void)
+* Author			: wwx423495     2017/3/14
+* Others			: 主机下发的数据格式为
+*                   1byte    1byte     1byte      1byte      1byte       2byte    2byte
+*                   地址位   功能码    子功能码   数据长度   文件类型    帧序号   crc  
+****************************************************************************************/
+static void ProcFileUploadData(u8 *pu8RecvMsg)
 {
-    DRV_Printf("\n** Interpret start **\n");
-    u8   i = 0;
-    u16  u16RecvCRC = 0;
-    u16  u16CalcCRC = 0;
-    u16  u16CalcCRCLength = 0;
-    u32  u32EquipAddr = 0;
+    DRV_Printf("ProcFileUploadData start... \n");
+    // 测试数据:
+    // 1 -- 00 41 06 03 90 00 01 5D B8
+    // 2 -- 00 41 06 03 90 00 02 1D B9
+    // 3 -- 00 41 06 03 90 00 03 DC 79
+    // 4 -- 00 41 06 03 90 00 04 9D BB
+    
+    u8  u8FileType = 0;
+    u8  u8FrameSize = 0;
+    u16 u16FrameSeqNum = 0;
+    u8 *pFrameDataBuf = NULL;
 
-    // 打印北向Modbus消息接收队列
-    NorthModbus_Show_MsgQueue(&g_stModbusRxQueue);
+    // 1.文件上传未启动
+	if (UPLOAD_DATA != g_stUploadFile.m_u8ProcessState)
+	{
+		g_stModbusRxMsg.m_eErrorType = UPLOAD_DATA_ERR1;
+		return;
+	}
 
-    MSG_ST TmpOutMsg = {0};
-    MDS_MSG_QUEUE_NODE_ST OutRxQueueMsg;
-    OutRxQueueMsg.data.m_pMsg = TmpOutMsg.buf;
+    g_stUploadFile.m_u8ProcessState = UPLOAD_DATA;
+	
+	// 2.校验数据长度
+	if (UPLOAD_DATA_DATA_LEN != pu8RecvMsg[UPLOAD_DATA_DATA_LEN_INDEX])
+	{
+		g_stModbusRxMsg.m_eErrorType = UPLOAD_DATA_ERR2;
+		return;
+	}
 
-    // 北向Modbus消息队列出队 -- 获取位于消息队列的一帧数据
-    NorthModbus_Out_MsgQueue(&g_stModbusRxQueue, &OutRxQueueMsg);
+	// 4.校验文件类型
+	u8FileType = pu8RecvMsg[UPLOAD_DATA_FILE_TYPE_INDEX];
+	if (u8FileType != g_stUploadFile.m_u8FileType)
+	{
+		g_stModbusRxMsg.m_eErrorType = UPLOAD_DATA_ERR3;
+		return;
+	}
 
-    u32EquipAddr = Get485EquipAddr();
-	DRV_Printf("485Addr: %d\n", u32EquipAddr);
+	// 5.判断帧序号，读取上传文件的帧数据
+	u16FrameSeqNum = BUILD_UINT16(pu8RecvMsg[UPLOAD_DATA_FRAME_NO_INDEX + 1], 
+                                  pu8RecvMsg[UPLOAD_DATA_FRAME_NO_INDEX]);
 
+	if (u8FileType == BOARD_ELABEL_FILE)
+	{
+	    if ((u16FrameSeqNum == g_stUploadFile.m_u16MaxFrame) &&
+	        (g_stUploadFile.m_u32FileSize % 4 != 0))
+	    {
+	        // 最后一帧减去之前补u32FileSize为4的倍数的字节数
+	        g_stUploadFile.m_u8FrameSize = g_stUploadFile.m_u8FrameSize - (4 - (g_stUploadFile.m_u32FileSize % 4));
+	    }
+	}
+	DRV_Printf("m_u8FrameSize = %d\n", g_stUploadFile.m_u8FrameSize);
 
-	/*
-    // TODO: 广播命令不回复, 待确认
-    if (0 == OutRxQueueMsg.data.m_pMsg[MDS_RD_ADDR_INDEX])
+	pFrameDataBuf = DynMemGet(g_stUploadFile.m_u8FrameSize);
+    if (pFrameDataBuf == NULL)
     {
-        return;
+        DRV_Printf("ProcFileUploadData DynMemGet failed!\n");
+        return ;
     }
-    */
+    memset(pFrameDataBuf, 0, g_stUploadFile.m_u8FrameSize);
 
-    // 自身设备地址与接收地址对比
-    if (OutRxQueueMsg.data.m_pMsg[MDS_RD_ADDR_INDEX] != u32EquipAddr)
+    DRV_Printf("u16FrameSeqNum: %d, m_u16CurFrameSeqNum: %d\n", u16FrameSeqNum, g_stUploadFile.m_u16CurFrameSeqNum);
+
+    //PrintFrameData(g_stUploadFile.m_u8FrameSize, pFrameDataBuf);
+    
+    // 根据读取Flash的起始地址，将帧数据读取到缓存中
+    if ((u16FrameSeqNum == g_stUploadFile.m_u16CurFrameSeqNum + 1) &&
+        (u16FrameSeqNum <= g_stUploadFile.m_u16MaxFrame) &&
+        (g_stUploadFile.m_u32FlashReadStartAddr <= g_stUploadFile.m_u32FlashReadEndAddr))
     {
-        return;
+        DRV_FlashRead(g_stUploadFile.m_u32FlashReadStartAddr, 
+                      pFrameDataBuf,
+                      g_stUploadFile.m_u8FrameSize);
+        g_stUploadFile.m_u32FlashReadStartAddr += g_stUploadFile.m_u8FrameSize;
+        g_stUploadFile.m_u16CurFrameSeqNum++;
     }
+	else
+	{
+	    g_stModbusRxMsg.m_eErrorType = UPLOAD_DATA_ERR5;
+		return;
+	}
 
-    // 获取功能码, 用于回复
-    g_stModbusRxMsg.m_u8AppCmd = OutRxQueueMsg.data.m_pMsg[MDS_RD_CMD_INDEX];
+    DRV_Printf("m_u8FrameSize = %d\n", g_stUploadFile.m_u8FrameSize);
+	// 根据缓存中的帧数据来计算文件CRC
+	g_stUploadFile.m_u16FileCRC = CalcUsaCrc16ByFunc(pFrameDataBuf, g_stUploadFile.m_u8FrameSize, g_stUploadFile.m_u16FileCRC);
 
-    // CRC校验
-    u16CalcCRCLength = OutRxQueueMsg.data.m_usMsgLenth - M_CRC_LENGTH;
-    // CRC校验码是低位字节在前，高位字节在后
-    u16RecvCRC = BUILD_UINT16(OutRxQueueMsg.data.m_pMsg[u16CalcCRCLength],
-                              OutRxQueueMsg.data.m_pMsg[u16CalcCRCLength + 1]);
+    ProcFileUploadDataReply(u16FrameSeqNum, pFrameDataBuf);
 
-    // 计算接受到数据帧的CRC值
-    u16CalcCRC = CalcUsaCrc16ByFunc(OutRxQueueMsg.data.m_pMsg, u16CalcCRCLength, 0xFFFF);
+    DynMemFree(pFrameDataBuf);
+    pFrameDataBuf = NULL;
+    
+    DRV_Printf("ProcFileUploadData stop... \n");
+}
 
-    // 测试数据: 00 41 20 0B 01 08 00 FF FF 00 01 02 03 04 05 50 E3 -- IBAT的广播数据帧
-    DRV_Printf("u16RecvCRC: %X, u16CalcCRC: %X\n",u16RecvCRC, u16CalcCRC);
+/******************************************************************************
+* Function Name  	: ProcFileUploadDataFinish
+* Description    	: 处理主机下发的上传文件数据完成命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/14
+* Others			: 主机下发的数据格式为
+*                   1byte    1byte     1byte      1byte      1byte      2byte
+*                   地址位   功能码    子功能码   数据长度   文件类型   crc  
+********************************************************************************/
+static void ProcFileUploadDataFinish(u8 *pu8RecvMsg)
+{
+    DRV_Printf("ProcFileUploadDataFinish start... \n");
+	u8 u8FileType = g_stUploadFile.m_u8FileType;
+    // 测试数据: 00 41 0C 01 90 F1 C3
 
-    if (u16CalcCRC != u16RecvCRC)
-    {
-        g_stModbusRxMsg.m_eErrorType   = ERROR_DATA;
-    }
-    else
-    {
-        //解析命令字, 遍历功能码列表，执行对应功能码命令
-        for (i = 0; i < ITEM_OF(g_stNorthMbCmdTable); i++)
-        {
-            if (g_stModbusRxMsg.m_u8AppCmd == g_stNorthMbCmdTable[i].m_u8Cmd)
-            {
-                DRV_Printf("\n** Interpret cmd **\n");
-                g_stModbusRxMsg.m_eErrorType   = DATA_OK;
-                g_stNorthMbCmdTable[i].m_pFunc((u8 *)&OutRxQueueMsg.data.m_pMsg[0]);
+    // 1.文件上传未启动
+	if ((UPLOAD_DATA != g_stUploadFile.m_u8ProcessState)
+         && (UPLOAD_END != g_stUploadFile.m_u8ProcessState))
+	{
+		g_stModbusRxMsg.m_eErrorType = UPLOAD_END_ERR1;
+		return;
+	}
+    
+    g_stUploadFile.m_u8ProcessState = UPLOAD_END;	
+	// 2.校验数据长度
+	if (UPLOAD_END_DATA_LEN != pu8RecvMsg[UPLOAD_END_DATA_LEN_INDEX])
+	{
+		g_stModbusRxMsg.m_eErrorType = UPLOAD_END_ERR2;
+		return;
+	}
 
-                /* 收到有效命令, 将通信失败定时器置起 */
-                //g_CommInfoSt[COMM_485].u8CommFailCont = TASK_30S_PRE_1S;
-                break;
-            }
-        }
+	// 3.校验文件类型
+	if (pu8RecvMsg[UPLOAD_END_FILE_TYPE_INDEX] != g_stUploadFile.m_u8FileType)
+	{
+		g_stModbusRxMsg.m_eErrorType = UPLOAD_END_ERR3;
+		return;
+	}
 
-        //判断是否是无效的命令
-        if (ITEM_OF(g_stNorthMbCmdTable) == i)
-        {
-            g_stModbusRxMsg.m_eErrorType = ERROR_FUNC;
-        }
-    }
+	switch(u8FileType)
+	{
+	case WIRELESS_DATA_FILE:
+		s_stCycRecTable[1].m_u32RecStartSide =(s_stCycRecTable[1].m_u32RecStopSide + 1) % s_stCycRecTable[1].m_u16QueueLen; ;
+		s_stCycRecTable[1].m_u32RecStartAddr = s_stCycRecTable[1].m_u32SideStAddrQueue[s_stCycRecTable[1].m_u32RecStartSide];
+        //DRV_Printf("ProcFileUploadDataFinish -- m_u32RecStartSide = %d\n", s_stCycRecTable[1].m_u32RecStartSide);
+		//DRV_Printf("ProcFileUploadDataFinish -- m_u32RecStartAddr = 0%X\n", s_stCycRecTable[1].m_u32RecStartAddr);
+		break;
+		
+	case RUN_LOG_FILE:
+		s_stCycRecTable[0].m_u32RecStartSide =(s_stCycRecTable[0].m_u32RecStopSide + 1) % s_stCycRecTable[0].m_u16QueueLen; ;
+		s_stCycRecTable[0].m_u32RecStartAddr = s_stCycRecTable[0].m_u32SideStAddrQueue[s_stCycRecTable[0].m_u32RecStartSide];
+		break;
+		
+	default:
+		break;
+	}
 
-    //错误时组包, 反馈给主机
-    if (DATA_OK != g_stModbusRxMsg.m_eErrorType)
-    {
-        NorthModbusPackErrorReply();
-    }
+    // 清空当前帧号，以便下次数据接收重新计数
+	g_stUploadFile.m_u16CurFrameSeqNum = 0;
 
-    DRV_Printf("\n** Interpret stop **\n");
+    ProcFileUploadDataFinishReply();
+
+    DRV_Printf("ProcFileUploadDataFinish stop... \n");
 }
 
 /*******************************************************************************
-* Function Name  	: NorthModbusMsgSendTask
-* Description    	: 从北向Modbus消息发送队列中取出一帧数据，
-*                   通过RS485(UART0)，发送数据至主机.
-* Input          	: None
+* Function Name  	: ProcQueryFileType
+* Description    	: 处理主机下发的查询文件类型列表命令 
+* Input          	: pu8RecvMsg -- 消息数据
 * Output         	: None
 * Return         	: None
 * Author			: 
 * Others			: None
 ********************************************************************************/
-void NorthModbusMsgSendTask(void)
+static void ProcQueryFileType(u8 *pu8RecvMsg)
 {
-    //DRV_Printf("** send **\n");
-    /* 发送错误 */
+
+}
+
+/*******************************************************************************
+* Function Name  	: ProcClearAlarm
+* Description    	: 处理主机下发的查询告警清除命令
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+static void ProcClearAlarm(u8 *pu8RecvMsg)
+{
+
+}
+
+/*******************************************************************************
+* Function Name  	: ProcDataTransparentTransfer
+* Description    	: 处理主机下发的数据透传命令
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: 主机下发的数据格式为
+*                   1byte    1byte   1byte     1byte     2byte     2byte     nbyte                                        2byte  
+*                   地址位   功能码  子功能码  数据长度  软件标识  数据长度  Data(设备网络地址(2byte) + Data (N-2 byte))  crc   
+********************************************************************************/
+static void ProcDataTransparentTransfer(u8 *pu8RecvMsg)
+{
+    // 测试数据: 00 41 20 0B 01 08 00 00 FF FF 00 01 02 03 04 05 50 E3 -- IBAT的广播数据帧
+    DRV_Printf("ProcDataTransparentTransfer start .. \n");
+
+    BOOL bNetStatus = 0;                    // 当前Zigbee设备的无线网络状态
+    afAddrType_t SendDstAddr;               // 与当前设备进行通信的设备目的地址
+    u8  u8Option = AF_DISCV_ROUTE;          // 操作选项
+    u16 u16SoftWareId = 0;                  // 设备类型(无线电表或是IBAT)
+    u16 u16ClusterId = 0;                   // 设备的簇ID -- 与设备类型一一对应
+    u16 u16NetAddr = 0;                     // 设备的通信网络地址(广播模式时网络地址均为0xFFFF)
+    u8  u8TransID = 0;                      // 透传ID
+    u8  u8DataLen = 0;                      // 将要发送的数据长度
+    u8 *pu8SendData = NULL;                 // 将要发送的数据的指针
+    u8 *pu8TmpData = NULL;
+    u16 u16DevDataLen = 0;
+    u8  u8Ret = 0;
+
+    // TODO: 解析透传数据之前，判断下当前Zigbee设备的无线网络状态，再决定要不要发送数据 !!
     /*
-    if (DMA_GetFlagStatus(DMA1_FLAG_TE4) != RESET)
+    if (DATA_GetSigValue(u16 u16SigId, DATA_SIGNAL_U * puSigValue))
     {
-        DMA_ClearFlag(DMA1_FLAG_TE4);
-        g_stModbusComm.m_usTxLenth = 0;
-
-        // 上报消息结束后, 状态切换为接收头
-        SET_UART1_RECEIVE
-        return;
-    }
-
-    // 发送完成 
-    if (DMA_GetFlagStatus(DMA1_FLAG_TC4) != RESET)
-    {
-        DMA_ClearFlag(DMA1_FLAG_TC4);
-        g_stModbusComm.m_usTxLenth = 0;
-        DelayMS(2);
-        SET_UART1_RECEIVE
+        return ;
     }
     */
 
-    // 若消息发送队列为空，则退出当前执行函数
-    if (IsMdsMsgQueueEmpty(&g_stModbusTxQueue)) 
+    u8DataLen = pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DATA_LEN_INDEX];
+    
+    // 申请内存
+    pu8TmpData = (u8 *)DynMemGet(u8DataLen);
+    if (pu8TmpData == NULL)
     {
+        DRV_Printf("pu8TmpData Mem get failed!\n");
         return ;
     }
 
-    MSG_ST TmpOutMsg = {0};
-    MDS_MSG_QUEUE_NODE_ST OutTxQueueMsg;
-    OutTxQueueMsg.data.m_pMsg = TmpOutMsg.buf;
+    // 透传数据长度不包含设备网络地址(2byte)
+    u8DataLen = u8DataLen - 2;
 
-    // 从北向Modbus消息发送队列中取出一帧数据
-    NorthModbus_Out_MsgQueue(&g_stModbusTxQueue, &OutTxQueueMsg);
+    // 保存透传数据的指针
+    pu8SendData = pu8TmpData;
 
-    // 如果发送帧足够长，才启动RS485(UART0)发送 
-    if ((OutTxQueueMsg.data.m_usMsgLenth >= MODBUS_MIN_FRAME_LENGTH) && 
-        (OutTxQueueMsg.data.m_usMsgLenth <= MODBUS_MAX_FRAME_LENGTH))
+    // 取出设备的数据长度减去2
+    u16DevDataLen = BUILD_UINT16(pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_DATA_LEN_INDEX + 1], 
+                                 pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_DATA_LEN_INDEX]) - 2;
+    //DRV_Printf("u16DevDataLen: %d\n", u16DevDataLen);
+
+    // 取出设备的SoftWareId进行判断，如果是无线电表类型的设备，需要将软件ID打包进透传数据
+    // 如果是IBAT类型的设备，则不需要将软件ID打包进透传数据
+    u16SoftWareId = BUILD_UINT16(pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_SOFTWARE_ID_INDEX + 1],
+                                 pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_SOFTWARE_ID_INDEX]);
+
+    if (u16SoftWareId == ZIGBEE_GENERAL_CLUSTER_ID)                     // Zigbee通用命令ID
     {
-        // TODO: 此处看是否需要用DMA的方式来发送数据
-        DRV_RS485Send(OutTxQueueMsg.data.m_pMsg, OutTxQueueMsg.data.m_usMsgLenth);
-        DelayMS(5);
-        //DRV_RS485DMASend(OutTxQueueMsg.data.m_pMsg, OutTxQueueMsg.data.m_usMsgLenth);
-        DRV_Printf("-- send done --\n");
+        u16ClusterId = IBAT_ZIGBEE_CLUSTER;
     }
-}
-
-/*******************************************************************************
-* Function Name  	: NorthModbusMsgProcessTask
-* Description    	: 北向Modbus消息处理任务函数，处理从RS485(UART0)接收的数据
-* Input          	: None
-* Output         	: None
-* Return         	: None
-* Author			: 
-* Others			: None
-********************************************************************************/
-void NorthModbusMsgRecvTask(void)
-{
-    // 若消息接收队列为空，则退出当前执行函数
-    if (IsMdsMsgQueueEmpty(&g_stModbusRxQueue))
+    else if (u16SoftWareId == IBAT_SOFTWARE_ID)                         // 设备类型为IBAT
     {
-        return ;
+        u16ClusterId = IBAT_CLUSTER_ID;
+    }
+    else if (u16SoftWareId == WIRELESS_ELECTRICITY_METER_SOFTWARE_ID)   // 设备类型为无线电表
+    {
+        u16ClusterId = WIRELESS_ELECTRICITY_METER_CLUSTER_ID;
+    }
+
+    // 重新打包设备真正的数据进透传数据中
+    (void *)memcpy(pu8TmpData, &pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_DATA_INDEX], u16DevDataLen); 
+
+    // 获取设备的网络地址
+    u16NetAddr = BUILD_UINT16(pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_NET_ADDR_INDEX + 1], 
+                              pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_NET_ADDR_INDEX]);
+
+    //DRV_Printf("u16NetAddr: 0x%X\n", u16NetAddr);
+    
+    // 判断是广播模式还是单播模式
+    if(u16NetAddr == 0xFFFF)
+    {
+        SendDstAddr.addrMode = (afAddrMode_t)AddrBroadcast;     // 广播模式
+        SendDstAddr.addr.shortAddr = 0xFFFF;
     }
     else
     {
-        WatchdogClear();
-        ModbusRxMsgInterpret();
+        SendDstAddr.addrMode = (afAddrMode_t)Addr16Bit;         // 单播模式
+        SendDstAddr.addr.shortAddr = u16NetAddr;
+        u8Option = u8Option | AF_ACK_REQUEST;
     }
+    SendDstAddr.endPoint = g_stZigbeeEndPointDesc.endPoint;
+
+    // Zigbee无线发送数据
+    // TODO: 注意! 如果增加了无线电表设备，g_stZigbeeEndPointDesc内部的参数需要增加无线电表的Cluster ID
+    u8Ret = AF_DataRequest(&SendDstAddr, &g_stZigbeeEndPointDesc,
+                           u16ClusterId,
+                           (byte)u16DevDataLen,
+                           (byte *)pu8SendData,
+                           &u8TransID,
+                           u8Option, AF_DEFAULT_RADIUS);
+
+    ProcDataTransparentTransferReply(pu8RecvMsg);
+    
+    // 释放内存 -- 将内存归还给"动态内存"块
+    DynMemFree(pu8TmpData);
+    pu8TmpData = NULL;
+
+    // 此处发送空主要是为了解决接收中断产生一次后，不发送数据则无法继续接收中断数据的问题
+    //DRV_RS485Send("  ", 2);
+    
+    DRV_Printf("ProcDataTransparentTransfer stop .. \n");
 }
