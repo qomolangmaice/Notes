@@ -1,0 +1,261 @@
+/*******************************************************************************************************
+* Function Name  	: ProcLoadStart
+* Description    	: 处理主机下发的启动文件加载命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/15
+* Others			: 主机下发的数据格式为
+*                   1byte    1byte     1byte      1byte      1byte       4byte       1byte        2byte
+*                   地址位   功能码    子功能码   数据长度   文件类型    文件长度    加载帧长度   crc
+********************************************************************************************************/
+static void ProcLoadStart(u8 *pu8RecvMsg)
+{
+    DRV_Printf("ProcLoadStart start... \n");
+    
+    // 文件加载启动 --   电子标签    -- 测试数据: 00 41 01 06 AB 00 00 01 24 20 B9 5B
+    // 文件加载启动 -- 单板APP升级包 -- 测试数据: 00 41 01 06 B5 00 03 70 00 40 F1 92
+    u8  u8FileType = 0;
+
+    // 校验数据长度
+	if (LOAD_START_DATA_LEN != pu8RecvMsg[LOAD_START_DATA_LEN_INDEX])
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_START_ERR1;
+		return;
+	}
+	
+    // 根据文件类型，决定加载文件的Flash起始写入地址，加载文件的Flash终止写入地址
+    u8FileType = pu8RecvMsg[LOAD_START_FILE_TYPE_INDEX];
+    switch (u8FileType)
+    {
+    case BOARD_APP_FILE:        // 单板的APP升级包文件
+        g_stLoadFile.m_u32FlashWriteStartAddr = APP2_START_ADDR;
+        g_stLoadFile.m_u32FlashWriteEndAddr   = APP2_END_ADDR;
+        WatchdogClear();
+        // 在文件加载启动的时候，擦除APP2_FLASH_SIZE大小的APP升级包文件在Flash上的存储区
+        DRV_FlashMassiveErase(APP2_START_ADDR, APP2_FLASH_SIZE);
+        break;
+        
+    case BOARD_ELABEL_FILE:     // 单板的电子标签文件
+        g_stLoadFile.m_u32FlashWriteStartAddr = ELABEL_DATA_ADDR;
+        g_stLoadFile.m_u32FlashWriteEndAddr   = ELABEL_END_ADDR;
+        // 在文件加载启动的时候，一次性擦除一页(2K)的Flash电子标签存储区，不能擦写多次
+        DRV_FlashMassiveErase(ELABEL_START_ADDR, FLASH_PAGE_BYTES);
+        break;
+        
+    default:
+        g_stModbusRxMsg.m_eErrorType = LOAD_START_ERR2;
+        return ;
+    }
+    g_stLoadFile.m_u8FileType = u8FileType;
+
+    g_stLoadFile.m_u32FileSize = BUILD_UINT32(pu8RecvMsg[LOAD_START_FILE_LEN_INDEX + 3], 
+                                              pu8RecvMsg[LOAD_START_FILE_LEN_INDEX + 2],
+                                              pu8RecvMsg[LOAD_START_FILE_LEN_INDEX + 1],
+                                              pu8RecvMsg[LOAD_START_FILE_LEN_INDEX]);
+
+    // TODO: 主机发送的数据帧长度必须为4的倍数，且(帧长度 + 10) % 14 != 0
+    // 每帧长度确认
+    if (pu8RecvMsg[LOAD_START_LOAD_FRAME_LEN_INDEX] >= MAX_LOAD_DATA_LENGTH)
+    {
+        g_stLoadFile.m_u8FrameSize = MAX_LOAD_DATA_LENGTH;
+    }
+    else
+    {
+        g_stLoadFile.m_u8FrameSize = pu8RecvMsg[LOAD_START_LOAD_FRAME_LEN_INDEX];
+    }
+
+    DRV_Printf("g_stLoadFile.m_u8FrameSize = %d\n", g_stLoadFile.m_u8FrameSize);
+
+    // 计算文件加载总帧数
+	g_stLoadFile.m_u16MaxFrame  = g_stLoadFile.m_u32FileSize / g_stLoadFile.m_u8FrameSize;
+	if ( 0 != (g_stLoadFile.m_u32FileSize % g_stLoadFile.m_u8FrameSize) )
+	{
+		g_stLoadFile.m_u16MaxFrame++;
+	}
+	DRV_Printf("m_u32FileSize = %d, m_u16MaxFrame = %d\n", g_stLoadFile.m_u32FileSize, g_stLoadFile.m_u16MaxFrame);
+
+    // 文件加载激活标志禁止
+    g_stLoadFile.m_bActivateAble = FALSE;
+    
+    // 更新为下一个状态 -- 文件加载传输态
+    g_stLoadFile.m_u8ProcessState = LOAD_DATA;
+
+    // 初始化计算文件CRC
+    g_stLoadFile.m_u16FileCRC = 0xFFFF;
+
+    ProcLoadStartReply();
+    
+    DRV_Printf("ProcLoadStart stop... \n");
+}
+
+/*******************************************************************************************************************
+* Function Name  	: ProcLoadData
+* Description    	: 处理主机下发的下发加载文件数据帧命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/15
+* Others			: 主机下发的数据格式为  
+*                   1byte    1byte     1byte      1byte      1byte       2byte        1bytes      N bytes     2byte
+*                   地址位   功能码    子功能码   数据长度   文件类型    加载帧序号   加载帧长度  加载帧数据  crc  
+********************************************************************************************************************/
+static void ProcLoadData(u8 *pu8RecvMsg)
+{
+    DRV_Printf("ProcLoadData start... \n");
+    
+    u8  u8FileType = 0;
+    u8  u8CalCrcFrameSize = 0;
+    u8  u8PackFrameSize = 0;
+    u16 u16FrameSeqNum = 0;
+    u8 *pCalCrcFrameDataBuf = NULL;     // 计算帧数据的CRC缓冲区
+    u8 *pWdFrameDataBuf = NULL;         // 写入到Flash中缓冲区
+    u16 u16LastFrameSize = 0;
+    u32 u32FlashWriteAddr = 0;
+    
+    // 1.文件加载未启动
+	if (LOAD_DATA != g_stLoadFile.m_u8ProcessState)
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR1;
+		return;
+	}
+
+    g_stLoadFile.m_u8ProcessState = LOAD_DATA;
+	
+	// 2.校验数据长度
+	if (g_stLoadFile.m_u16CurFrameSeqNum != g_stLoadFile.m_u16MaxFrame)
+	{
+	    // 检验除了最后一帧的任意一帧的帧长度
+	    if (LOAD_DATA_DATA_LEN + g_stLoadFile.m_u8FrameSize != pu8RecvMsg[LOAD_DATA_DATA_LEN_INDEX])
+    	{
+    		g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR2;
+    		return;
+    	}
+	}
+	else
+	{
+	    // 校验最后一帧的帧长度
+	    u16LastFrameSize = g_stLoadFile.m_u32FileSize - (g_stLoadFile.m_u16MaxFrame - 1) * g_stLoadFile.m_u8FrameSize;
+    	if (LOAD_DATA_DATA_LEN + u16LastFrameSize != pu8RecvMsg[LOAD_DATA_DATA_LEN_INDEX])
+    	{
+    		g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR3;
+    		return;
+    	}
+	}
+	
+	// 4.校验文件类型
+	u8FileType = pu8RecvMsg[LOAD_DATA_FILE_TYPE_INDEX];
+	if (u8FileType != g_stLoadFile.m_u8FileType)
+	{
+		g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR4;
+		return;
+	}
+
+	// 5.判断帧序号，擦除Flash, 将数据帧写入Flash
+	u16FrameSeqNum = BUILD_UINT16(pu8RecvMsg[LOAD_DATA_FRAME_NO_INDEX + 1], 
+                                  pu8RecvMsg[LOAD_DATA_FRAME_NO_INDEX]);
+
+    DRV_Printf("u16FrameSeqNum: %d, m_u16CurFrameSeqNum: %d\n", u16FrameSeqNum, g_stLoadFile.m_u16CurFrameSeqNum);
+
+    u8CalCrcFrameSize = pu8RecvMsg[LOAD_DATA_LOAD_FRAME_LEN_INDEX];
+    u8PackFrameSize = u8CalCrcFrameSize;
+
+    // 计算数据帧CRC的时候用的缓冲区, 缓冲区中保存的是数据帧的完整数据，不多也不能不少
+    pCalCrcFrameDataBuf = DynMemGet(u8CalCrcFrameSize);
+    if (pCalCrcFrameDataBuf == NULL)
+    {
+        DRV_Printf("ProcLoadData -- pCalCrcFrameDataBuf DynMemGet failed!\n");
+        return ;
+    }
+    memset(pCalCrcFrameDataBuf, 0, u8CalCrcFrameSize);
+    memcpy(pCalCrcFrameDataBuf, (void *)&pu8RecvMsg[LOAD_DATA_DATA_INDEX], u8CalCrcFrameSize);
+
+    DRV_Printf("u8CalCrcFrameSize = %d\n", u8CalCrcFrameSize);
+    
+    // 每次接收到加载数据后，计算一次文件CRC
+    g_stLoadFile.m_u16FileCRC = CalcUsaCrc16ByFunc(pCalCrcFrameDataBuf, u8CalCrcFrameSize, g_stLoadFile.m_u16FileCRC);
+
+    DRV_Printf("g_stLoadFile.m_u16FileCRC = %X\n", g_stLoadFile.m_u16FileCRC);
+
+    if (u8CalCrcFrameSize % 4 != 0)  // 补u8CalCrcFrameSize为4的倍数，主要是为了解决Flash每次写入必须为4的倍数字节问题
+	{
+		u8CalCrcFrameSize = u8CalCrcFrameSize + (4 - u8CalCrcFrameSize % 4);		
+	}
+
+    // 写入Flash的时候用的缓冲区，缓冲区大小必须是4的倍数
+    pWdFrameDataBuf = DynMemGet(u8CalCrcFrameSize);
+    if (pWdFrameDataBuf == NULL)
+    {
+        DRV_Printf("ProcLoadData -- pWdFrameDataBuf DynMemGet failed!\n");
+        return ;
+    }
+    memset(pWdFrameDataBuf, 0, u8CalCrcFrameSize);
+    memcpy(pWdFrameDataBuf, pCalCrcFrameDataBuf, u8CalCrcFrameSize);
+  
+    if ((u16FrameSeqNum == g_stLoadFile.m_u16CurFrameSeqNum + 1) &&
+       (u16FrameSeqNum <= g_stLoadFile.m_u16MaxFrame))
+    {
+        // 如果写入地址已经到了边界，回复错误给主机
+        if (g_stLoadFile.m_u32FlashWriteStartAddr >= g_stLoadFile.m_u32FlashWriteEndAddr)
+        {
+            g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR5;
+		    return;
+        }
+        if (u8FileType == BOARD_APP_FILE)
+        {
+            // TODO: 主机发送的其他帧的帧长度必须为64字节
+            if (u16FrameSeqNum == 0)			// 向Flash中写入第1帧数据, 为文件头数据
+    		{
+    			// 擦除升级标志位Flash区域和文件头Flash区域，共2K大小
+    			DRV_FlashMassiveErase(UPDATEFLAG_START_ADDR, UPDATEFLAG_END_ADDR - UPDATEFLAG_START_ADDR + 1);
+    			u32FlashWriteAddr = UPDATEFLAG_START_ADDR + BOARD_UPDATE_APP_FLAG_OFFSET;
+    			if (TRUE != DRV_FlashWrite(u32FlashWriteAddr, u8CalCrcFrameSize, pWdFrameDataBuf))
+    			{
+    				DRV_Printf("Write Flash[%x] Err\n", u32FlashWriteAddr);
+    				g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR6;
+		            return;
+    			}
+    		}
+    		else if (u16FrameSeqNum == 1)		// 向Flash中写入第2帧数据，为文件头数据
+    		{
+    			u32FlashWriteAddr = UPDATEFLAG_START_ADDR + BOARD_UPDATE_APP_FLAG_OFFSET + u8CalCrcFrameSize * u16FrameSeqNum;
+    			if (TRUE != DRV_FlashWrite(u32FlashWriteAddr, u8CalCrcFrameSize, pWdFrameDataBuf))
+    			{
+    				DRV_Printf("Write Flash[%x] Err\n", u32FlashWriteAddr);
+    				g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR7;
+		            return;
+    			}
+    		}	
+    		else	                            // 从第3帧数据开始向Flash中写入APP的升级包
+    		{	
+    			u32FlashWriteAddr= APP2_START_ADDR + (u32)(u16FrameSeqNum - 2) * u8CalCrcFrameSize;
+    			if (TRUE != DRV_FlashWrite(u32FlashWriteAddr, u8CalCrcFrameSize, pWdFrameDataBuf))
+    			{
+    				DRV_Printf("Write Flash[%x] Err\n", u32FlashWriteAddr);
+    				g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR8;
+		            return;
+    			}
+    		}
+        }
+        else
+        {
+            DRV_FlashWrite(g_stLoadFile.m_u32FlashWriteStartAddr, u8CalCrcFrameSize, pWdFrameDataBuf);
+        }
+        g_stLoadFile.m_u32FlashWriteStartAddr += u8CalCrcFrameSize;
+        g_stLoadFile.m_u16CurFrameSeqNum++;
+    }
+	else
+	{
+	    g_stModbusRxMsg.m_eErrorType = LOAD_DATA_ERR6;
+		return;
+	}
+
+	ProcLoadDataReply(u8PackFrameSize, u16FrameSeqNum);
+
+    DynMemFree(pCalCrcFrameDataBuf);
+    DynMemFree(pWdFrameDataBuf);
+    pCalCrcFrameDataBuf = NULL;
+    pWdFrameDataBuf = NULL;
+
+    DRV_Printf("ProcLoadData stop... \n");
+}
