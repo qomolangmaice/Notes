@@ -1,0 +1,452 @@
+/****************************************************************************
+Version: 	
+Description: 北向Modbus通信函数
+Others: 	    无
+History:
+****************************************************************************/
+
+/*********************  系统级别的相关头文件 *******************/
+#include "string.h"
+#include "stdlib.h"
+#include "hw_memmap.h"
+#include "gpio.h"
+
+/*********************  bsp提供的相关头文件  ******************/
+#include "DriverPublic.h"
+#include "watchdog.h"
+
+/*********************  内部声明的相关头文件 ******************/
+#include "NorthModbusComm.h"
+#include "DynMemManage.h"
+#include "InnerUart.h"
+#include "InnerFlash.h"
+#include "AppPublic.h"
+#include "AF.h"
+#include "ZDApp.h"
+#include "SysMantainPublic.h"
+#include "DataDefinition.h"
+
+#define BOARD_ELABEL_LENGTH					            (ELABEL_END_ADDR - ELABEL_START_ADDR)     /* 单板电子标签最大长度 */
+#define BOARD_ELABEL_HEAD_LENGTH				        16                                        /* 单板电子标签头 */
+
+#define BOARD_UPDATE_APP_FLAG_LEN						16                                        // 升级标志长度
+#define BOARD_UPDATE_APP_FLAG_OFFSET					256                                       // 单板的APP升级包标志位区域偏移
+
+#define DIAL_SWITCH_ON_VAL      1
+#define DIAL_SWITCH_OFF_VAL     0
+// 拨码开关的Pin脚
+#define DIAL_SWITCH_BASE        GPIO_B_BASE
+#define DIAL_SWITCH_1_PIN       GPIO_PIN_0
+#define DIAL_SWITCH_2_PIN       GPIO_PIN_1
+#define DIAL_SWITCH_3_PIN       GPIO_PIN_2
+#define DIAL_SWITCH_4_PIN       GPIO_PIN_3
+
+/* 网络状态 */
+#define PERMIT_JOIN_NO             (u16)0x0000   /* 不允许新节点加入 */
+#define PERMIT_JOIN_YES            (u16)0x0001   /* 允许新节点加入   */
+
+#define CLEAR_NWK_PARAMETER        (u16)0x0000   /* 清除网络参数 */
+
+// 拨码开关的开关关闭和打开状态
+typedef enum 
+{
+    //DIAL_SWITCH_ON_STATUS      = 0,   // 所有单个拨码开关的打开状态均为0
+    DIAL_SWITCH_1_OFF_STATUS   = 1, // 拨码开关的开关1的关闭状态
+    DIAL_SWITCH_2_OFF_STATUS   = 2, // 拨码开关的开关2的关闭状态 
+    DIAL_SWITCH_3_OFF_STATUS   = 4, // 拨码开关的开关3的关闭状态
+    DIAL_SWITCH_4_OFF_STATUS   = 8, // 拨码开关的开关4的关闭状态
+} DIAL_SWITCH_STATUS_E;   
+
+typedef struct
+{
+    u8 m_cPin;                      // 拨码开关单个开关对应的引脚
+    u8 m_cStatus;                   // 拨码开关单个开关对应的状态
+} DIAL_SWITCH_STATUS_ST;
+
+typedef struct
+{
+	u32 m_u32Bkp1AppEndAdd;
+	u32 m_u32Bkp2AppEndAdd;
+	u8  m_u8UpdateAppFlag[BOARD_UPDATE_APP_FLAG_LEN];
+	u8  m_u8BkpAppSelect;
+	u8  m_u8Reserved;
+	u16 m_u16Reserved;
+} BOARD_APP_UPDATE_SOFTWARE_INFO_ST;
+
+/*********************  内部的宏定义 ***************************/
+
+/*******************************************************************************
+                			    全局变量定义
+*******************************************************************************/
+DIAL_SWITCH_STATUS_ST g_stDialSwitchStatusTable[] =     // 拨码开关状态表
+{
+    {DIAL_SWITCH_1_PIN, DIAL_SWITCH_1_OFF_STATUS},
+    {DIAL_SWITCH_2_PIN, DIAL_SWITCH_2_OFF_STATUS},
+    {DIAL_SWITCH_3_PIN, DIAL_SWITCH_3_OFF_STATUS},
+    {DIAL_SWITCH_4_PIN, DIAL_SWITCH_4_OFF_STATUS},
+};
+
+// 消息队列的"动态内存"块
+static u8 g_ucMsgMemoryBlock[MAX_MSG_MEMORY_SIZE] = {0};
+
+MODBUS_FRAME_BUF g_stModbusRxMsg;                   // 当前正在处理的接收帧
+
+MDS_MSG_QUEUE_ST g_stModbusRxQueue;                 // 北向Modbus消息接收队列
+MDS_MSG_QUEUE_ST g_stModbusTxQueue;                 // 北向Modbus消息发送队列
+
+LOAD_FILE_ST   g_stLoadFile = {0};                  // 加载文件全局结构体变量
+UPLOAD_FILE_ST g_stUploadFile = {0};                // 上传文件全局结构体变量
+
+u8 const s_LoadBoardAppToInnerFlashFlag[BOARD_UPDATE_APP_FLAG_LEN] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+														              0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+														         
+typedef struct
+{
+    u8 	    m_u8Cmd;      			        // 后台命令 
+    void 	(*m_pFunc)(u8 *pu8Data);        // 功能函数, 参数为接收到的消息
+} NORMDS_CMD_ITEM;
+
+typedef struct
+{
+    u16 	m_u16RegAddr;      			    // 写寄存器地址 
+    BOOL 	(*m_pFunc)(u8 *pu8Data);        // 功能函数, 参数为接收到的消息
+} WRITE_REG_PROC_ITEM;
+
+//MODBUS 协议的读寄存器信号 -- 采集信号表
+const u16 g_astNorthMdRdRegsTable[] =
+{
+    MDS_REG_SIGNAL_SOFTWARE_VERSION,                   // ZigBee转换板软件版本号
+    MDS_REG_SIGNAL_HARDWARE_VERSION ,                  // ZigBee转换板硬件版本号
+    MDS_REG_SIGNAL_WIRELESS_DATA_UPDATE_FLAG,          // 无线数据更新标志
+    NV_SIGNAL_DEV_IN_NET_NUMS ,                        // 当前已入网设备节点个数
+};
+
+// 执行功能码命令
+static void ProcMbReadRegMsg(u8 *pu8RecvMsg);
+static void ProcMbWriteSingleRegMsg(u8 *pu8RecvMsg);
+static void ProcMbWriteMultiRegMsg(u8 *pu8RecvMsg);
+static void ProcMbReadEquipID(u8 *pu8RecvMsg);
+static void ProcMbManage(u8 *pu8RecvMsg);
+
+// 执行子功能码命令
+static void ProcUpdateRequest(u8 *pu8RecvMsg);
+static void ProcLoadStart(u8 *pu8RecvMsg);
+static void ProcLoadData(u8 *pu8RecvMsg);
+static void ProcLoadFinish(u8 *pu8RecvMsg);
+static void ProcLoadDataActivate(u8 *pu8RecvMsg);
+static void ProcQueryActivateProgress(u8 *pu8RecvMsg);
+static void ProcQueryVersion(u8 *pu8RecvMsg);
+static void ProcFileUploadStart(u8 *pu8RecvMsg);
+static void ProcFileUploadData(u8 *pu8RecvMsg);
+static void ProcFileUploadDataFinish(u8 *pu8RecvMsg);
+static void ProcQueryFileType(u8 *pu8RecvMsg);
+static void ProcClearAlarm(u8 *pu8RecvMsg);
+static void ProcDataTransparentTransfer(u8 *pu8RecvMsg);
+
+static void ProcLoadStartReply(void);
+static void ProcLoadDataReply(u16 u16FrameSeqNum, u8 u8PackFrameSize);
+static void ProcLoadFinishReply(void);
+
+static void ProcFileUploadStartReply(void);
+static void ProcFileUploadDataReply(u16 u16FrameSeqNum, u8 *pFrameDataBuf);
+static void ProcFileUploadDataFinishReply(void);
+static void ProcLoadDataActivateReply(void);
+static void ProcDataTransparentTransferReply(u8 *pu8RecvMsg);
+
+static void ZigBeeCommClearNwkRsp(void);
+static BOOL ProcOrganizeNwk(u8 *pu8RecvMsg);
+static BOOL ProcEraseNwkParameter(u8 *pu8RecvMsg);
+static BOOL ProcResetBoard(u8 *pu8RecvMsg);
+
+static u32 NorModbus_BUILD_UINT32(u8 *pu8RecvMsg, u8 ucIndex);
+
+static void ModbusRxMsgInterpret(void);
+static u32 Get485EquipAddr(void);
+
+static u8 GetSetRegVal(u8 *pu8RecvMsg, u16 u16SigId, SIG_EXT_VAL* pstSigVal, u16 u16RegNo, u8 u8DataStartIndex);
+static u8 NorthModbusGetSigVal(u8* pu8SendMsg, u16 u16SigId, u8 u8Index);
+
+static void NorthModbusPackSigIdReply(void);
+static void NorthModbusPackAndSendWdReply(u8 *pu8RecvMsg);
+static void NorthModbusPackErrorReply(void);
+
+static void PackMdsTxCrc(u8* pu8Data, u32 num, u16 u16CRC);
+static BOOL bModbusFindInRegAddrValTab(u16 u16MdsRegAddr, const u16* pstTable, u16 u16TableLen);
+
+static void GetFileUploadInfo(u8 u8FileType, u32 u32FlashStartAddr, u32 u32FlashEndAddr);
+
+static void SaveBoardElabelHead(u16 usLength, u16 usCrc);
+static void ReadBoardElabelHead(u16 * pusElabelLen, u16 * pusElabelCrc);
+
+static u8 APP_WriteSignalToNV(u16 u16SignalId, u8* pu8Buff, u8 u8SigLen);
+static u8 APP_ReadSignalFromNV(u16 u16SignalId, u8* pu8Buff, u8 u8SigLen);
+
+void WriteDataIntoFlash(void);
+
+// Modbus 协议的功能码与其相应执行函数的映射表
+static NORMDS_CMD_ITEM const g_stNorthMbCmdTable[ ] =
+{
+    {MODBUS_READ_CMD          , ProcMbReadRegMsg        },   // 读寄存器命令
+    {MODBUS_WRITE_SINGLE_CMD  , ProcMbWriteSingleRegMsg },   // 写单个寄存器命令
+    //{MODBUS_WRITE_MULTI_CMD   , ProcMbWriteMultiRegMsg  },   // 写多个寄存器命令 
+    //{MODBUS_READ_EQUIP_ID_CMD , ProcMbReadEquipID       },   // 设备识别码读取
+    {MODBUS_MANAGE_CMD        , ProcMbManage            },   // 支持加载、文件传输、消息透传
+};
+
+// Modbus 协议的子功能码与其相应执行函数的映射表
+static NORMDS_CMD_ITEM const g_stNorthMbChildCmdTable[ ] =
+{
+    //{MODBUS_UPDATE_REQUEST_CHILD_CMD            , ProcUpdateRequest           },  // 升级请求命令
+    
+    {MODBUS_LOAD_START_CHILD_CMD                , ProcLoadStart               },  // 启动加载命令
+    {MODBUS_LOAD_DATA_CHILD_CMD                 , ProcLoadData                },  // 下发数据帧命令
+    {MODBUS_LOAD_FINISH_CHILD_CMD               , ProcLoadFinish              },  // 加载结束命令
+    {MODBUS_LOAD_ACTIVATE_CHILD_CMD             , ProcLoadDataActivate        },  // 激活版本命令
+    
+    //{MODBUS_QUERY_ACTIVATE_PROGRESS_CHILD_CMD   , ProcQueryActivateProgress   },  // 查询激活进度命令
+    //{MODBUS_QUERY_VERSION_CHILD_CMD             , ProcQueryVersion            },  // 查询版本命令
+    
+    {MODBUS_FILE_UPLOAD_START_CHILD_CMD         , ProcFileUploadStart         },  // 上传文件启动命令
+    {MODBUS_FILE_UPLOAD_DATA_CHILD_CMD          , ProcFileUploadData          },  // 上传数据命令
+    {MODBUS_FILE_UPLOAD_DATA_FINISH_CHILD_CMD   , ProcFileUploadDataFinish    },  // 上传文件完成命令
+    
+    //{MODBUS_QUERY_FILE_TYPE_CHILD_CMD           , ProcQueryFileType           },  // 查询文件类型列表命令
+    //{MODBUS_CLEAR_ALARM_CHILD_CMD               , ProcClearAlarm              },  // 告警清除命令
+    
+    {MODBUS_DATA_TRANSPARENT_TRANSFER_CHILD_CMD , ProcDataTransparentTransfer },  // 数据透传命令
+};
+
+//MODBUS 协议的写单个寄存器信号 -- 设置信号以及控制信号
+const WRITE_REG_PROC_ITEM const g_stNorthMdWdSingleRegTable[] =
+{
+    // 设置信号
+    {MDS_REG_SIGNAL_ORGANIZE_NWK          , ProcOrganizeNwk         }, // 组网开关, 0：关闭组网；1：打开组网；默认关闭组网
+    
+    // 控制信号
+    {MDS_REG_SIGNAL_CONVERTER_BOARD_RESET , ProcResetBoard          }, // Zigbee转换板复位
+    {MDS_REG_SIGNAL_ERASE_NWK_PARAMETER   , ProcEraseNwkParameter   }, // Zigbee转换板擦除网络参数
+};
+
+/******************************************************************
+* Function     :   NorthModbusCommInit
+* Description  :   北向Modbus通信初始化:
+*                  (1).初始化消息队列的"动态内存"块
+*                  (2).消息接收队列初始化
+*                  (3).消息发送队列初始化
+* Input        :   无
+* Output       :   无
+* Return       :   无
+* Others       :
+******************************************************************/
+void NorthModbusCommInit(void)
+{
+    // 初始化消息队列的"动态内存"块
+    DynMemCreate((void *)g_ucMsgMemoryBlock, MAX_MSG_MEMORY_SIZE);
+    
+    // 初始化北向Modbus消息接收队列
+    NorthModbusMsgQueueInit(&g_stModbusRxQueue);
+
+    // 初始化北向Modbus消息发送队列
+    NorthModbusMsgQueueInit(&g_stModbusTxQueue);
+}
+
+/*******************************************************************************
+* Function Name  	: Get485EquipAddr
+* Description    	: 获取本单板的设备地址
+* Input          	: None
+* Output         	: None
+* Return         	: u32DialSwitchCode -- 返回设备地址
+* Author			: wwx423495     2017/2/28
+* Others			: None
+********************************************************************************/
+static u32 Get485EquipAddr(void)
+{
+    u8 u32DialSwitchCode = 0;
+    u8 u8DialSwitchStatus = 0;
+    u32 u32RS485EquipAddr = 0;  
+
+    for (int i = 0; i < ITEM_OF(g_stDialSwitchStatusTable); i++)
+    {
+        u8DialSwitchStatus = GPIOPinRead(DIAL_SWITCH_BASE, g_stDialSwitchStatusTable[i].m_cPin);
+        if (u8DialSwitchStatus == g_stDialSwitchStatusTable[i].m_cStatus)
+        {
+            u32DialSwitchCode |= (DIAL_SWITCH_OFF_VAL << i);
+        }
+        else
+        {
+            u32DialSwitchCode |= (DIAL_SWITCH_ON_VAL  << i);
+        }
+    }
+
+    // TODO: 根据获取到的码值以及计算公式得到最终的设备地址
+    return u32DialSwitchCode;
+}
+
+/*******************************************************************************
+* Function Name  	: PackMdsTxCrc
+* Description    	: 封装北向Modbus 协议发送帧中的crc
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+void PackMdsTxCrc(u8* pu8Data, u32 u32Num, u16 u16CRC)
+{
+    u16 u16CRCTemp;
+
+    // 形参指针非空判断
+    if (NULL == pu8Data)
+    {
+        return;
+    }
+
+    // 形参非零防减翻判断
+    if (0 == u32Num)
+    {
+        return;
+    }
+
+    u16CRCTemp = CalcUsaCrc16ByFunc(pu8Data, u32Num, u16CRC);
+
+    // CRC数据，无论发送数据还是接收数据均为低位字节在前，高位字节在后
+    pu8Data[u32Num]     = LO_UINT16(u16CRCTemp);
+    pu8Data[u32Num + 1] = HI_UINT16(u16CRCTemp);
+}
+
+/******************************************************************
+ * Function     :   ModbusFindInRegAddrValTab
+ * Description  :   在寄存器表格中寻找寄存器地址
+ * Calls        :
+ * Called By    :
+ * Input        :
+ * Output       :   无
+ * Return       :   正确返回 true，错误返回false
+ * Others       :   .
+******************************************************************/
+static BOOL bModbusFindInRegAddrValTab(u16 usMdsRegAddr, const u16* pstTable, u16 usTableLen)
+{
+    u16 i;
+
+    // 遍历命令列表，找到返回true
+    for (i = 0; i < usTableLen; i++)
+    {
+        if ((*pstTable) == usMdsRegAddr)
+        {
+            return TRUE;
+        }
+
+        pstTable++;
+    }
+
+    // 遍历找不到命令，返回FALSE；
+    return FALSE;
+}
+
+/******************************************************************
+ * Function     :   NorthModbusGetSigVal
+ * Description  :   北向modbus 协议获取信号值并组帧
+ * Calls        :
+ * Called By    :
+ * Input        :   pu8SendMsg -- 待发送的消息
+ *                  u16SigId -- 信号ID
+ *                  u8Index -- 索引值
+ * Output       :   无
+ * Return       :   无
+ * Others       :
+******************************************************************/
+static u8 NorthModbusGetSigVal(u8* pu8SendMsg, u16 u16SigId, u8 u8Index)
+{
+    u8 i, j;
+    u8 u8RegNum = 0;
+    SIG_PHY_VAL stTempVal;
+    SIG_EXT_VAL stSigVal = {0};
+
+    if (Modbus_GetSigVal(u16SigId, &stSigVal))
+    {
+        switch (stSigVal.eValType)
+        {
+            case TYPE_UINT64:
+            case TYPE_FLOAT:
+            case TYPE_UINT32:
+            case TYPE_INT32:
+            {
+                // TODO: 浮点数量化待检验
+                // 浮点数量化后有变成无符号数和有符号数 
+                if (TYPE_FLOAT == stSigVal.eValType)
+                {
+                    stSigVal.uSigVal.u32Val = (u32)(stSigVal.uSigVal.fVal * 100 + 0.5);
+                }
+
+                stTempVal = stSigVal.uSigVal;
+
+                // TODO:32位值打包待检验
+                // 32位值按4个字节数据打包
+                for (i = (u8Index * 2), j = 4; i < (u8Index * 2 + 4); i++, j--)
+                {
+                    pu8SendMsg[MDS_RDREPLY_VAL_ST_ADDR_INDEX + i] = *((u8*)(&stTempVal.u32Val) + j);
+                }
+
+                u8RegNum = 2;
+                break;
+            }
+
+            case TYPE_INT16:
+            case TYPE_UINT16:
+            case TYPE_UINT8:
+            case TYPE_BOOL:
+            {
+                // DRV_Printf("u8Index: %d\n", u8Index);
+                // 一字节的类型，当成两字节处理
+                stTempVal = stSigVal.uSigVal;
+                pu8SendMsg[2 * u8Index + MDS_RDREPLY_VAL_ST_ADDR_INDEX]     = HI_UINT16(stTempVal.i16Val);
+                pu8SendMsg[2 * u8Index + MDS_RDREPLY_VAL_ST_ADDR_INDEX + 1] = LO_UINT16(stTempVal.i16Val);
+
+                DRV_Printf("h_val: %X, ", pu8SendMsg[2 * u8Index + MDS_RDREPLY_VAL_ST_ADDR_INDEX]);
+                DRV_Printf("l_val: %X\n", pu8SendMsg[2 * u8Index + MDS_RDREPLY_VAL_ST_ADDR_INDEX + 1]);
+                
+                u8RegNum = 1;
+                break;
+            }
+
+            default:
+                u8RegNum = 1;
+                break;
+        }
+    }
+    else
+    {   
+        // 发送数据采取高位字节在前，低位字节在后
+        pu8SendMsg[2 * u8Index + MDS_RDREPLY_VAL_ST_ADDR_INDEX]     = HI_UINT16(0xFFFF);
+        pu8SendMsg[2 * u8Index + MDS_RDREPLY_VAL_ST_ADDR_INDEX + 1] = LO_UINT16(0xFFFF);
+        u8RegNum = 1;
+    }
+
+    return u8RegNum;
+}
+
+/******************************************************************
+ * Function     :   u32ModbusCombinMsbLsb
+ * Description  :   把4个8位组成一个u32值
+ * Calls        :
+ * Called By    :
+ * Input        :
+ * Output       :   无
+ * Return       :   无
+ * Others       :
+******************************************************************/
+static u32 NorModbus_BUILD_UINT32(u8 *pu8RecvMsg, u8 ucIndex)
+{
+/*
+    u8 ucTmp[4] = {0};
+    u32 ulVal = 0;
+
+    ucTmp[0] = pu8RecvMsg[MDS_MULTI_WD_REG_VAL_INDEX + 2 * ucIndex + 3];
+    ucTmp[1] = pu8RecvMsg[MDS_MULTI_WD_REG_VAL_INDEX + 2 * ucIndex + 2];
+    ucTmp[2] = pu8RecvMsg[MDS_MULTI_WD_REG_VAL_INDEX + 2 * ucIndex + 1];
+    ucTmp[3] = pu8RecvMsg[MDS_MULTI_WD_REG_VAL_INDEX + 2 * ucIndex];
+    ulVal = *((u32*)ucTmp);
+
+    return ulVal;
+*/
+}
