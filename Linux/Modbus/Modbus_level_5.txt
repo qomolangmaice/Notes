@@ -1,0 +1,276 @@
+/*****************************************************************************************************
+* Function Name  	: ProcLoadStartReply
+* Description    	: 回复主机下发的启动文件加载命令 
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/15
+* Others			: 回复给主机的数据格式为
+*                   1byte    1byte     1byte      1byte      1byte       4byte       1byte        2byte
+*                   地址位   功能码    子功能码   数据长度   文件类型    文件长度    加载帧长度   crc
+******************************************************************************************************/
+static void ProcLoadStartReply(void)
+{
+    u8  ucCrcIndex;
+    u32 u32EquipAddr = 0;
+    u8 *pu8PackBuf = NULL;
+    
+	MSG_ST TmpTxMsg = {0};
+    TmpTxMsg.length= 0;
+    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
+    pu8PackBuf = TmpTxMsg.buf;
+	
+	// 获取当前设备地址
+    u32EquipAddr = Get485EquipAddr();
+    // 从节点地址打包
+    *pu8PackBuf++ = (u8)u32EquipAddr;
+    // 功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppCmd;
+    // 子功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppChildCmd;
+    // 数据长度打包
+    *pu8PackBuf++ = LOAD_START_DATA_LEN;
+    // 加载文件类型打包
+    *pu8PackBuf++ = g_stLoadFile.m_u8FileType;
+    // 加载文件长度打包
+    UINT32_TO_BUF_BIG_ENDIAN(pu8PackBuf, g_stLoadFile.m_u32FileSize);
+    // 加载文件数据帧长度打包
+    *pu8PackBuf++ = g_stLoadFile.m_u8FrameSize;
+    // 计算crc的位置
+    ucCrcIndex = (u8)(pu8PackBuf - TmpTxMsg.buf); 
+    //封装crc的值
+    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+    // 更新发送数据长度
+    TmpTxMsg.length = ucCrcIndex + MDS_REPLY_CRC_LEN;
+
+    // 将要发送的消息添加到消息发送队列中
+    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+}
+
+/*******************************************************************************************************
+* Function Name  	: ProcLoadDataReply
+* Description    	: 回复主机下发的下发加载文件数据帧命令 
+* Input          	: u16FrameSeqNum -- 帧序号
+*                   u8PackFrameSize -- 帧大小
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/17
+* Others			: 回复给主机的数据格式为
+*                   1byte    1byte     1byte      1byte      1byte       2byte        1bytes      2byte
+*                   地址位   功能码    子功能码   数据长度   文件类型    加载帧序号   加载帧长度  crc  
+********************************************************************************************************/
+static void ProcLoadDataReply(u16 u16FrameSeqNum, u8 u8PackFrameSize)
+{
+    u8  ucCrcIndex = 0;
+    u32 u32EquipAddr = 0;
+    u8 *pu8PackBuf = NULL;
+    
+	MSG_ST TmpTxMsg = {0};
+    TmpTxMsg.length= 0;
+    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
+    pu8PackBuf = TmpTxMsg.buf;
+	
+	// 获取当前设备地址
+    u32EquipAddr = Get485EquipAddr();
+    // 从节点地址打包
+    *pu8PackBuf++ = (u8)u32EquipAddr;
+    // 功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppCmd;
+    // 子功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppChildCmd;
+    // 数据长度打包
+    *pu8PackBuf++ = LOAD_DATA_REPLY_DATA_LEN;
+    // 加载文件类型打包
+    *pu8PackBuf++ = g_stLoadFile.m_u8FileType;
+    // 加载文件数据帧序号打包
+    *pu8PackBuf++ = HI_UINT16(u16FrameSeqNum);
+    *pu8PackBuf++ = LO_UINT16(u16FrameSeqNum);
+    // 加载文件的帧长度打包
+    *pu8PackBuf++ = u8PackFrameSize;
+    // 计算crc的位置
+    ucCrcIndex = (u8)(pu8PackBuf - TmpTxMsg.buf);
+    // 封装crc的值
+    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+    // 更新发送数据长度
+    TmpTxMsg.length = ucCrcIndex + MDS_REPLY_CRC_LEN;
+    
+    // 将要发送的消息添加到消息发送队列中
+    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+}
+
+/**************************************************************************************
+* Function Name  	: ProcLoadFinishReply
+* Description    	: 回复主机下发的加载文件结束命令 
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/17
+* Others			: 回复给主机的数据格式为
+*                   1byte    1byte     1byte      1byte      1byte      2byte    2byte
+*                   地址位   功能码    子功能码   数据长度   文件类型   文件CRC  crc  
+****************************************************************************************/
+static void ProcLoadFinishReply(void)
+{
+    u8  ucCrcIndex = 0;
+    u32 u32EquipAddr = 0;
+    u8 *pu8PackBuf = NULL;
+
+    MSG_ST TmpTxMsg = {0};
+    TmpTxMsg.length= 0;
+    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
+    pu8PackBuf = TmpTxMsg.buf;
+    
+	// 获取当前设备地址
+    u32EquipAddr = Get485EquipAddr();
+    // 从节点地址打包
+    *pu8PackBuf++ = (u8)u32EquipAddr;
+    // 功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppCmd;
+    // 子功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppChildCmd;
+    // 数据长度打包
+    *pu8PackBuf++ = LOAD_END_DATA_LEN;
+    // 加载文件类型打包
+    *pu8PackBuf++ = g_stLoadFile.m_u8FileType;
+    // 加载文件CRC打包
+    *pu8PackBuf++ = HI_UINT16(g_stLoadFile.m_u16FileCRC);
+    *pu8PackBuf++ = LO_UINT16(g_stLoadFile.m_u16FileCRC);
+    // 计算crc的位置
+    ucCrcIndex = (u8)(pu8PackBuf - TmpTxMsg.buf);
+    // 封装crc的值
+    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+    // 更新发送数据长度
+    TmpTxMsg.length = ucCrcIndex + MDS_REPLY_CRC_LEN;
+
+    // 将要发送的消息添加到消息发送队列中
+    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+}
+
+/**************************************************************************************
+* Function Name  	: ProcLoadDataActivateReply
+* Description    	: 回复主机下发的激活加载文件命令 
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/17
+* Others			: 回复给主机的数据格式为
+*                   1byte    1byte     1byte      1byte      1byte      1byte    2byte
+*                   地址位   功能码    子功能码   数据长度   文件类型   响应码   crc  
+****************************************************************************************/
+static void ProcLoadDataActivateReply(void)
+{
+    u8  ucCrcIndex = 0;
+    u32 u32EquipAddr = 0;
+    u8 *pu8PackBuf = NULL;
+
+    MSG_ST TmpTxMsg = {0};
+    TmpTxMsg.length= 0;
+    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
+    pu8PackBuf = TmpTxMsg.buf;
+    
+	// 获取当前设备地址
+    u32EquipAddr = Get485EquipAddr();
+    // 从节点地址打包
+    *pu8PackBuf++ = (u8)u32EquipAddr;
+    // 功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppCmd;
+    // 子功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppChildCmd;
+    // 数据长度打包
+    *pu8PackBuf++ = LOAD_ACTIVE_REPLY_LEN;
+    // 加载文件类型打包
+    *pu8PackBuf++ = g_stLoadFile.m_u8FileType;
+    // 响应码打包 -- 主节点收到此响应后无需查询进度
+    *pu8PackBuf++ = LOAD_ACTIVATE_RESPOND_CODE_NOT_QUERY_PROGRESS;
+    // 计算crc的位置
+    ucCrcIndex = (u8)(pu8PackBuf - TmpTxMsg.buf);
+    // 封装crc的值
+    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+    // 更新发送数据长度
+    TmpTxMsg.length = ucCrcIndex + MDS_REPLY_CRC_LEN;
+
+    // 将要发送的消息添加到消息发送队列中
+    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+}
+
+/*********************************************************************************************************************************
+* Function Name  	: ProcDataTransparentTransferReply
+* Description    	: 回复主机下发的透传命令 
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/17
+* Others			: 回复给主机的数据格式为
+*                   1byte    1byte   1byte    1byte    2byte    2byte     nbyte                                       2byte  
+*                   地址位   功能码  子功能码  数据长度  软件标识  数据长度  Data(设备网络地址(2byte) + Data (N-2 byte))  crc   
+**********************************************************************************************************************************/
+static void ProcDataTransparentTransferReply(u8 *pu8RecvMsg)
+{
+    u8  ucCrcIndex = 0;
+    u32 u32EquipAddr = 0;
+    u8 *pu8PackBuf = NULL;
+    u8  u8DataLen = 0;
+    u16 u16DevDataLen = 0;
+    u16 u16SoftWareId = 0;
+
+    MSG_ST TmpTxMsg = {0};
+    TmpTxMsg.length= 0;
+    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
+    pu8PackBuf = TmpTxMsg.buf;
+
+    u8DataLen = pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DATA_LEN_INDEX];
+
+    // 取出设备的数据长度
+    u16DevDataLen = BUILD_UINT16(pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_DATA_LEN_INDEX + 1], 
+                                 pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_DATA_LEN_INDEX]);
+    //DRV_Printf("u16DevDataLen: %d\n", u16DevDataLen);
+
+    u16SoftWareId = BUILD_UINT16(pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_SOFTWARE_ID_INDEX + 1],
+                                 pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_SOFTWARE_ID_INDEX]);
+    
+	// 获取当前设备地址
+    u32EquipAddr = Get485EquipAddr();
+    // 从节点地址打包
+    *pu8PackBuf++ = (u8)u32EquipAddr;
+    // 功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppCmd;
+    // 子功能码打包
+    *pu8PackBuf++ = g_stModbusRxMsg.m_u8AppChildCmd;
+    // 数据长度打包
+    *pu8PackBuf++ = u8DataLen;
+    // 软件标识打包 
+    *pu8PackBuf++ = HI_UINT16(u16SoftWareId);
+    *pu8PackBuf++ = LO_UINT16(u16SoftWareId);
+    // 透传数据长度打包 
+    *pu8PackBuf++ = HI_UINT16(u16DevDataLen);
+    *pu8PackBuf++ = LO_UINT16(u16DevDataLen);
+
+    // 透传数据打包回复
+    memcpy(pu8PackBuf, &pu8RecvMsg[MDS_TRANSPARENT_TRANSFER_DEV_NET_ADDR_INDEX], u16DevDataLen);
+    pu8PackBuf += u16DevDataLen;
+    
+    // 计算crc的位置
+    ucCrcIndex = (u8)(pu8PackBuf - TmpTxMsg.buf);
+    
+    // 封装crc的值
+    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+    // 更新发送数据长度
+    TmpTxMsg.length = ucCrcIndex + MDS_REPLY_CRC_LEN;
+
+    // 将要发送的消息添加到消息发送队列中
+    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+}
+
+/*******************************************************************************
+* Function Name  	: ProcUpdateRequest
+* Description    	: 处理主机下发的升级请求命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+static void ProcUpdateRequest(u8 *pu8RecvMsg)
+{
+    // 此需求待定
+}
