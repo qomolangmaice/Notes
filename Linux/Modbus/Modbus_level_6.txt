@@ -1,0 +1,385 @@
+/******************************************************************
+ * Function     :   NorthModbusPackSigIdReply
+ * Description  :   北向modbus协议处理读寄存器命令，并读取到的寄存器中
+ *                  寄存器的值打包,回复给主机
+ * Calls        :
+ * Called By    :
+ * Input        :   无
+ * Output       :   无
+ * Return       :   无
+ * Others       :   回复帧数据格式为:
+ *                  1byte    1byte      1byte             2byte             2×N byte   2byte
+ *                  地址位   功能码     字节数(2+2×N)    寄存器起始地址    寄存器值    crc  
+******************************************************************/
+static void NorthModbusPackSigIdReply(void)
+{
+    // TODO: 读硬件版本号需要计算得出
+    u8  ucCrcIndex;
+    u8  u8RegNum = 1;
+    u16 i;
+    u32 u32EquipAddr = 0;
+
+    MSG_ST TmpTxMsg = {0};
+    TmpTxMsg.length= 0;
+    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
+
+    // 获取当前设备地址
+    u32EquipAddr = Get485EquipAddr();
+
+    // 打包即将发送的数据包
+    TmpTxMsg.buf[MDS_RDREPLY_ADDR_INDEX] = u32EquipAddr;
+    TmpTxMsg.buf[MDS_RDREPLY_CMD_INDEX]  = g_stModbusRxMsg.m_u8AppCmd;
+    
+    // 发送字节数L = n * 2 + 2, n:寄存器个数
+    TmpTxMsg.buf[MDS_RDREPLY_BYTE_NUMS_INDEX] = g_stModbusRxMsg.m_u16AppRdRegNums * 2 + 2;
+
+    // 发送数据采取高位字节在前，低位字节在后
+    TmpTxMsg.buf[MDS_RDREPLY_REG_ST_ADDR_INDEX] = HI_UINT16(g_stModbusRxMsg.m_u16AppRdRegStarAddr);
+    TmpTxMsg.buf[MDS_RDREPLY_REG_ST_ADDR_INDEX + 1] = LO_UINT16(g_stModbusRxMsg.m_u16AppRdRegStarAddr);
+
+    DRV_Printf("h_addr: %X, ", TmpTxMsg.buf[MDS_RDREPLY_REG_ST_ADDR_INDEX]);
+    DRV_Printf("l_addr: %X\n", TmpTxMsg.buf[MDS_RDREPLY_REG_ST_ADDR_INDEX + 1]);
+
+    // 填充主机查询的寄存器的值 -- 读单个寄存器和读多个寄存器共用同一个机制来填充寄存器的值
+    for (i = 0; i < g_stModbusRxMsg.m_u16AppRdRegNums;)
+    {
+        //寄存器ID，同时也是信号ID ,直接作为入参
+        u8RegNum = NorthModbusGetSigVal((u8 *)&TmpTxMsg.buf[0], (g_stModbusRxMsg.m_u16AppRdRegStarAddr + i), i);
+        i += u8RegNum;
+    }
+
+    // 计算crc的位置
+    ucCrcIndex = MDS_RDREPLY_ADDR_LEN + MDS_RDREPLY_CMD_LEN + MDS_RDREPLY_BYTE_NUMS_LEN
+                 + TmpTxMsg.buf[MDS_RDREPLY_BYTE_NUMS_INDEX];
+
+    //封装crc的值
+    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+
+    // 更新发送数据长度
+    TmpTxMsg.length = ucCrcIndex + MDS_RDREPLY_CRC_LEN;
+
+    // 将要发送的消息添加到消息发送队列中
+    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+
+    PrintFrameData(TmpTxMsg.length, TmpTxMsg.buf);
+}
+
+/******************************************************************
+ * Function     :   SetSampleReg
+ * Description  :   设置采样类型寄存器
+ * Calls        :
+ * Called By    :
+ * Input        :   u16SigId -- 寄存器对应的信号ID/usRegAddr: 寄存器地址
+ *              :   u16RegNo -- 寄存器序号,表示第几个寄存器
+ * Output       :   pstSigVal -- 使用pstSigVal指针取出将要写的寄存器的值
+ * Return       :   无
+ * Others       :
+ ******************************************************************/
+static u8 GetSetRegVal(IN u8 *pu8RecvMsg,IN u16 u16SigId, OUT SIG_EXT_VAL* pstSigVal, 
+                            IN u16 u16RegNo, IN u8 u8DataStartIndex)
+{
+    u8 u8Val_High, u8Val_Low;
+    u8 u8ReadRegNum = 1;
+
+    if (!Modbus_GetSigVal(u16SigId, pstSigVal))    // 使用pstSigVal指针取出将要写的寄存器的值
+    {
+        return u8ReadRegNum;
+    }
+
+    switch (pstSigVal->eValType)    
+    {
+        case TYPE_UINT32:
+        case TYPE_INT32:
+        {
+            pstSigVal->uSigVal.u32Val = NorModbus_BUILD_UINT32(pu8RecvMsg, u16RegNo);   // 与写多个寄存器相关，暂不考虑
+            u8ReadRegNum = 2;
+            break;
+        }
+
+        case TYPE_FLOAT:
+        {
+            pstSigVal->uSigVal.u32Val = NorModbus_BUILD_UINT32(pu8RecvMsg, u16RegNo);   // 与写多个寄存器相关，暂不考虑
+            pstSigVal->uSigVal.fVal = (float)pstSigVal->uSigVal.u32Val;
+            u8ReadRegNum = 2;
+            break;
+        }
+
+        case TYPE_INT16:
+        case TYPE_UINT16:
+        case TYPE_UINT8:
+        {
+            u8Val_High = pu8RecvMsg[u8DataStartIndex + 2 * u16RegNo];
+            u8Val_Low  = pu8RecvMsg[u8DataStartIndex + 2 * u16RegNo + 1];
+            pstSigVal->uSigVal.u16Val = BUILD_UINT16(u8Val_Low, u8Val_High);
+            //DRV_Printf("GetSetRegVal -- pstSigVal->uSigVal.u16Val = %X\n", pstSigVal->uSigVal.u16Val);
+            u8ReadRegNum = 1;
+            break;
+        }
+
+        default:
+            break;
+    }
+
+    return u8ReadRegNum;
+
+}
+
+/******************************************************************
+ * Function     :   NorthModbusPackAndSendWdReply
+ * Description  :   北向modbus协议处理发送命令
+ * Calls        :
+ * Called By    :
+ * Input        :   无
+ * Output       :   无
+ * Return       :   无
+ * Others       :
+******************************************************************/
+static void NorthModbusPackAndSendWdReply(u8 *pu8RecvMsg)
+{
+    u8  ucCrcIndex;
+    u32 u32EquipAddr = 0;
+    u16 u16RegVal = 0;
+
+    MSG_ST TmpTxMsg = {0};
+    TmpTxMsg.length = 0;
+    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
+
+    // 获取当前设备地址
+    u32EquipAddr = Get485EquipAddr();
+
+    // 打包即将发送的数据包
+    TmpTxMsg.buf[MDS_SINGLE_WD_ADDR_INDEX] = u32EquipAddr;
+    TmpTxMsg.buf[MDS_SINGLE_WD_CMD_INDEX]  = g_stModbusRxMsg.m_u8AppCmd;
+    TmpTxMsg.buf[MDS_SINGLE_WD_REG_ADDR_INDEX]     = HI_UINT16(g_stModbusRxMsg.m_u16AppRdRegStarAddr);
+    TmpTxMsg.buf[MDS_SINGLE_WD_REG_ADDR_INDEX + 1] = LO_UINT16(g_stModbusRxMsg.m_u16AppRdRegStarAddr);
+
+    if (MODBUS_WRITE_SINGLE_CMD == g_stModbusRxMsg.m_u8AppCmd)  // 写单个寄存器
+    {
+        u16RegVal = BUILD_UINT16(pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX + 1],
+                                 pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX]);
+        TmpTxMsg.buf[MDS_SINGLE_WD_REG_VAL_INDEX]     = pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX];
+        TmpTxMsg.buf[MDS_SINGLE_WD_REG_VAL_INDEX + 1] = pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX + 1];
+    }
+    else // 写多个寄存器 -- 后期有需求再加，先预留着
+    {
+        //TmpTxMsg.buf[MDS_MULTI_WD_REG_NUMS_INDEX]     = HI_UINT16(g_stModbusRxMsg.m_u16AppRdRegNums);
+        //TmpTxMsg.buf[MDS_MULTI_WD_REG_NUMS_INDEX + 1] = LO_UINT16(g_stModbusRxMsg.m_u16AppRdRegNums);
+    }
+
+    // 计算crc的位置
+    ucCrcIndex = MDS_SINGLE_WD_ADDR_LEN + MDS_SINGLE_WD_CMD_LEN
+                 + MDS_SINGLE_WD_REG_ADDR_LEN + MDS_SINGLE_WD_REG_VAL_LEN;
+
+    //封装crc的值
+    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+
+    // 更新发送数据长度
+    TmpTxMsg.length = ucCrcIndex + MDS_RDREPLY_CRC_LEN;
+
+    // 单板复位做特殊处理
+    if ((g_stModbusRxMsg.m_u16AppRdRegStarAddr == MDS_REG_SIGNAL_CONVERTER_BOARD_RESET) &&
+         u16RegVal == BOARD_RESET)
+    {
+        DRV_RS485Send(&TmpTxMsg.buf[0], TmpTxMsg.length);
+        return ;
+    }
+
+    // 擦除网络参数做特殊处理
+    if ((g_stModbusRxMsg.m_u16AppRdRegStarAddr == MDS_REG_SIGNAL_ERASE_NWK_PARAMETER) &&
+         u16RegVal == ERASE_NWK_PARAMETER)
+    {
+        DRV_RS485Send(&TmpTxMsg.buf[0], TmpTxMsg.length);
+        return ;
+    }
+
+    // 将要发送的消息添加到消息发送队列中
+    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+}
+
+/******************************************************************
+ * Function     :   AllowJoinNWK
+ * Description  :   打开组网 / 关闭组网
+ * Input        :   cmd  -- 打开组网 或者 关闭组网 命令
+ * Output       :   无
+ * Return       :   无
+ * Others       :
+******************************************************************/
+void AllowJoinNWK(int16 cmd)
+{
+    u8 u8AllowJoin;
+	SIG_EXT_VAL uValue;
+
+    if((true != cmd) &&  (false != cmd))
+    {   //返回错误命令
+        return;
+    }
+    u8AllowJoin = cmd;
+    if(devState == DEV_HOLD)
+    {
+        /* 创建网络 */
+        ZDOInitDevice(0);
+        DRV_Printf("AllowJoinNWK -- Create NWK!\n");
+    }
+    else if(devState == DEV_ZB_COORD)//当网络创建完成后，禁止/允许才起作用
+    {
+        if(u8AllowJoin) //第一次是允许新设备加入
+        {
+            NLME_PermitJoiningRequest(0xFF);    //允许节点加入 
+			uValue.uSigVal.u32Val = PERMIT_JOIN_YES;
+			DRV_Printf("AllowJoinNWK -- NLME_PermitJoiningRequest!\n");
+        }
+        else 
+        {
+            NLME_PermitJoiningRequest(0);       //不允许路由器加入 
+			uValue.uSigVal.u32Val = PERMIT_JOIN_NO;
+        }
+		Modbus_SetSigVal((u16)NV_SIGNAL_NETWORK_STATE, &uValue);
+    }
+}
+
+/*******************************************************************************
+* Function Name  	: ProcOrganizeNwk
+* Description    	: 执行上位机发送过来的组网命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/20
+* Others			: None
+********************************************************************************/
+static BOOL ProcOrganizeNwk(u8 *pu8RecvMsg)
+{
+    DRV_Printf("ProcOrganizeNwk start!\n");
+    BOOL bRet = TRUE;
+    u16 u16RegVal = BUILD_UINT16(pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX + 1], 
+                                 pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX]);
+
+    DRV_Printf("u16RegVal = 0x%X\n", u16RegVal);
+    if (u16RegVal == ZIGBEE_OPEN_NWK)         // 打开组网
+    {
+        AllowJoinNWK(u16RegVal);
+        DRV_Printf("Open zigbee network!\n");
+        g_stModbusRxMsg.m_eErrorType = DATA_OK;
+        bRet = TRUE;
+    }
+    else if (u16RegVal == ZIGBEE_CLOSE_NWK)   // 关闭组网
+    {
+        AllowJoinNWK(u16RegVal);
+        DRV_Printf("Close zigbee network!\n");
+        g_stModbusRxMsg.m_eErrorType = DATA_OK;
+        bRet = TRUE;
+    }
+    else
+    {
+        DRV_Printf("ProcOrganizeNwk -- No valid value!\n");
+        g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
+        bRet = FALSE;
+    }
+
+    return bRet;
+}
+
+/*******************************************************************************
+* Function Name  	: ProcResetBoard
+* Description    	: 执行上位机发送过来的单板复位命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/20
+* Others			: None
+********************************************************************************/
+static BOOL ProcResetBoard(u8 *pu8RecvMsg)
+{
+    BOOL bRet = TRUE;
+    u16 u16RegVal = BUILD_UINT16(pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX + 1], 
+                                 pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX]);
+    
+    if (u16RegVal != BOARD_RESET)
+    {
+        DRV_Printf("ProcResetBoard -- No valid value!\n");
+        g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
+        bRet = FALSE;
+    }
+    else if (u16RegVal == BOARD_RESET)
+    {
+        // 因为复位后单板无法回复主机，所以先回复给主机已收到复位命令，避免主机重发多次复位命令
+        NorthModbusPackAndSendWdReply(pu8RecvMsg);
+        ResetBoard();
+        bRet = TRUE;
+    }
+
+    return bRet;
+}
+
+/******************************************************************************
+Function: 	  ZigBeeCommClearNwkRsp
+Description:    ZigBee通信清除组网响应函数
+Input:          None
+Output: 	       None
+Returns: 	   None
+Author: 	
+Others: 	       None
+*******************************************************************************/
+static void ZigBeeCommClearNwkRsp(void)
+{
+    u8 u8startOptions = 0;
+    SIG_EXT_VAL uValue;
+    SIG_EXT_VAL stSetSigTmp;
+
+    /* 设置启动模式，用于软件复位后，根据此设置擦除网络参数及网络创建 */
+    u8startOptions = ZCD_STARTOPT_CLEAR_STATE | ZCD_STARTOPT_CLEAR_CONFIG;
+    (void)zgWriteStartupOptions(ZG_STARTUP_SET, u8startOptions);
+
+    /* 擦除程序运行状态 */
+    uValue.uSigVal.u32Val = PERMIT_JOIN_NO;
+    Modbus_SetSigVal((u16)NV_SIGNAL_NETWORK_STATE, &uValue);
+
+    //Modbus_GetSigVal(NV_SIGNAL_DEV_IN_NET_NUMS, &stSetSigTmp);
+    //DRV_Printf("DEV_IN_NET_NUMS -- before set val: 0x%X\n", stSetSigTmp.uSigVal.u16Val);
+
+    /* 擦除程序运行状态 */
+    uValue.uSigVal.u16Val= CLEAR_NWK_PARAMETER;
+    Modbus_SetSigVal((u16)NV_SIGNAL_DEV_IN_NET_NUMS, &uValue);
+
+    //Modbus_GetSigVal(NV_SIGNAL_DEV_IN_NET_NUMS, &stSetSigTmp);
+    //DRV_Printf("DEV_IN_NET_NUMS -- after  set val: 0x%X\n", stSetSigTmp.uSigVal.u16Val);
+
+    /* 软件复位 */
+    ResetBoard();
+}
+
+/*******************************************************************************
+* Function Name  	: ProcEraseNwkParameter
+* Description    	: 执行上位机发送过来的擦除网络参数命令 
+* Input          	: pu8RecvMsg -- 消息数据
+* Output         	: None
+* Return         	: None
+* Author			: wwx423495     2017/3/20
+* Others			: None
+********************************************************************************/
+static BOOL ProcEraseNwkParameter(u8 *pu8RecvMsg)
+{
+    DRV_Printf("ProcEraseNwkParameter start!\n");
+    BOOL bRet = TRUE;
+    u16 u16RegVal = BUILD_UINT16(pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX + 1], 
+                                 pu8RecvMsg[MDS_SINGLE_WD_REG_VAL_INDEX]);
+
+    DRV_Printf("u16RegVal = 0x%X\n", u16RegVal);
+    if (u16RegVal != ERASE_NWK_PARAMETER)   
+    {
+        DRV_Printf("No valid value!\n");
+        g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
+        bRet = FALSE;
+    }
+    else if (u16RegVal == ERASE_NWK_PARAMETER)     // 打开擦除网络参数
+    {
+        // 因为擦除网络参数后，单板会复位，复位后单板无法回复主机，所以先回复给主机已收到擦除网络参数命令，避免主机重发多次擦除网络参数命令
+        NorthModbusPackAndSendWdReply(pu8RecvMsg);
+        ZigBeeCommClearNwkRsp();
+        DRV_Printf("Erase network parameter!\n");
+        g_stModbusRxMsg.m_eErrorType = DATA_OK;
+        bRet = TRUE;
+    }
+
+    DRV_Printf("ProcEraseNwkParameter stop!\n");
+    return bRet;
+}
