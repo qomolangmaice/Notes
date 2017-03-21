@@ -1,0 +1,422 @@
+/*******************************************************************************
+* Function Name  	: ProcMbReadRegMsg
+* Description    	: 处理主机下发的读寄存器命令(采集信号)
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: pu8RecvMsg的数据格式为:
+*                   1byte    1byte      2byte           2byte        2byte  
+*                   地址位   功能码     寄存器起始地址  寄存器数目   crc  
+********************************************************************************/
+static void ProcMbReadRegMsg(u8 *pu8RecvMsg)
+{
+    // 读软件版本号测试数据: 00 03 00 00 00 01 85 DB
+    DRV_Printf("** ProcMbReadRegMsg start **\n");
+    g_stModbusRxMsg.m_u16AppRdRegNums = BUILD_UINT16(pu8RecvMsg[MDS_RD_REGS_NUM_INDEX + 1],
+                                                     pu8RecvMsg[MDS_RD_REGS_NUM_INDEX]);
+
+    // 寄存器个数是否超过上限
+    if (g_stModbusRxMsg.m_u16AppRdRegNums > MAX_REG_NUM)
+    {
+        g_stModbusRxMsg.m_u16AppRdRegNums = 0;
+        g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
+        return;
+    }
+
+    // 记录主机要查询的寄存器起始地址和寄存器个数，以便回复
+    g_stModbusRxMsg.m_u16AppRdRegStarAddr = BUILD_UINT16(pu8RecvMsg[MDS_RD_REG_ST_ADDR_INDEX + 1],
+                                                         pu8RecvMsg[MDS_RD_REG_ST_ADDR_INDEX]);
+
+    if (TRUE == bModbusFindInRegAddrValTab(g_stModbusRxMsg.m_u16AppRdRegStarAddr,
+                                           g_astNorthMdRdRegsTable,
+                                           ITEM_OF(g_astNorthMdRdRegsTable)))
+    {
+        // 采集信号的命令字正确校验后，打包回复命令
+        NorthModbusPackSigIdReply();
+    }
+    else
+    {
+        g_stModbusRxMsg.m_eErrorType = ERROR_ADDRESS;
+    }
+    DRV_Printf("** ProcMbReadRegMsg stop **\n");
+}
+
+/*******************************************************************************
+* Function Name  	: ProcMbWriteSingleRegMsg
+* Description    	: 处理主机下发的写单个寄存器命令
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: pu8RecvMsg的数据格式为:
+*                   1byte    1byte      2byte       2byte      2byte  
+*                   地址位   功能码     寄存器地址  寄存器值   crc  
+********************************************************************************/
+static void ProcMbWriteSingleRegMsg(u8 *pu8RecvMsg)
+{
+    DRV_Printf("** ProcMbWriteSingleRegMsg start **\n");
+    // 开启组网测试数据: 00 06 C0 11 00 01 25 DE
+    // 关闭组网测试数据: 00 06 C0 11 00 00 E4 1E
+    // 单板复位测试数据: 00 06 C1 00 A5 A5 0E CC
+    // 擦除网络参数测试数据: 00 06 C1 01 A5 A5 5F 0C
+    u16 i;
+    u8  u8ReadRegNum = 0;
+    u16 u16RegStartAddr;
+    SIG_EXT_VAL stSetSig = {0};
+
+    SIG_EXT_VAL stSetSigTmp = {0};
+
+    // 记录主机要设置的寄存器起始地址和寄存器个数，以便回复
+    g_stModbusRxMsg.m_u16AppRdRegStarAddr = BUILD_UINT16(pu8RecvMsg[MDS_SINGLE_WD_REG_ADDR_INDEX + 1],
+                                                         pu8RecvMsg[MDS_SINGLE_WD_REG_ADDR_INDEX]);
+
+    u16RegStartAddr  = g_stModbusRxMsg.m_u16AppRdRegStarAddr;
+
+    DRV_Printf("u16RegStartAddr: 0x%X\n", u16RegStartAddr);
+
+    // 遍历写单个寄存器信号映射表
+    for (i = 0; i < ITEM_OF(g_stNorthMdWdSingleRegTable); i++)
+    {
+        // 找到对应的寄存器地址
+        if (u16RegStartAddr == g_stNorthMdWdSingleRegTable[i].m_u16RegAddr)
+        {
+            // stSetSig 取出了写单个寄存器信号对应的寄存器的值
+            u8ReadRegNum = GetSetRegVal(pu8RecvMsg, u16RegStartAddr, &stSetSig, 0, MDS_SINGLE_WD_REG_VAL_INDEX);
+
+            // 写单个寄存器命令,只设置单个寄存器
+            if (u8ReadRegNum >= 2)
+            {
+                g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
+                break;
+            }
+
+            Modbus_GetSigVal(u16RegStartAddr, &stSetSigTmp);
+            DRV_Printf("ProcMbWriteSingleRegMsg -- before set val: 0x%X\n", stSetSigTmp.uSigVal.u16Val);
+
+            Modbus_SetSigVal(u16RegStartAddr, &stSetSig);
+
+            Modbus_GetSigVal(u16RegStartAddr, &stSetSigTmp);
+            DRV_Printf("ProcMbWriteSingleRegMsg -- after  set val: 0x%X\n", stSetSigTmp.uSigVal.u16Val);
+
+            // 更新信号对应的寄存器值配置表，并执行信号对应的功能函数
+            if (!Modbus_SetSigVal(u16RegStartAddr, &stSetSig) ||
+                !(g_stNorthMdWdSingleRegTable[i].m_pFunc(pu8RecvMsg)))
+            {
+                g_stModbusRxMsg.m_eErrorType = ERROR_DATA;
+            }
+
+            break;
+        }
+    }
+
+    if (i >= ITEM_OF(g_stNorthMdWdSingleRegTable))
+    {
+        // 寄存器地址没有找到
+        g_stModbusRxMsg.m_eErrorType = ERROR_ADDRESS;
+    }
+
+    if (DATA_OK == g_stModbusRxMsg.m_eErrorType)
+    {
+        NorthModbusPackAndSendWdReply(pu8RecvMsg);
+    }
+    DRV_Printf("** ProcMbWriteSingleRegMsg stop **\n");
+}
+
+/*******************************************************************************
+* Function Name  	: ProcMbWriteMultiRegMsg
+* Description    	: 处理主机下发的写多个寄存器命令 
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: pu8RecvMsg的数据格式为:
+*                   1byte    1byte      2byte        2byte       1byte   nbyte     2byte  
+*                   地址位   命令类型   寄存器地址   寄存器个数  字节数  寄存器值   crc  
+********************************************************************************/
+static void ProcMbWriteMultiRegMsg(u8 *pu8RecvMsg)
+{
+
+}
+
+/*******************************************************************************
+* Function Name  	: ProcMbReadEquipID
+* Description    	: 处理主机下发的设备识别码(获取设备类型和版本号)读取命令
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+static void ProcMbReadEquipID(u8 *pu8RecvMsg)
+{
+
+}
+
+/*******************************************************************************
+* Function Name  	: ProcMbManage
+* Description    	: 处理主机下发的管理命令 -- 包括加载、文件传输、查询、消息透传等命令
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: 数据格式为
+*                   1byte    1byte     1byte      1byte      nbyte   2byte  
+*                   地址位   功能码     子功能码    数据长度   data    crc    
+********************************************************************************/
+static void ProcMbManage(u8 *pu8RecvMsg)
+{
+    DRV_Printf("ProcMbManage start .. \n");
+    u16 i;
+    u8  u8ReadRegNum = 0;
+    u16 u16AppSubCmd;
+
+    // 记录主机发过来的消息的子功能码，以便回复
+    g_stModbusRxMsg.m_u8AppChildCmd = pu8RecvMsg[MDS_MANAGE_CHILD_CMD_INDEX];
+
+    u16AppSubCmd  = g_stModbusRxMsg.m_u8AppChildCmd;
+
+    // 遍历子功能码列表，执行对应子功能码命令函数
+    for (i = 0; i < ITEM_OF(g_stNorthMbChildCmdTable); i++)
+    {
+        if (u16AppSubCmd == g_stNorthMbChildCmdTable[i].m_u8Cmd)
+        {
+            g_stModbusRxMsg.m_eErrorType   = DATA_OK;
+            g_stNorthMbChildCmdTable[i].m_pFunc(pu8RecvMsg);
+
+            /* 收到有效命令, 将通信失败定时器置起 */
+            //g_CommInfoSt[COMM_485].u8CommFailCont = TASK_30S_PRE_1S;
+            break;
+        }
+        
+        //判断是否是无效的命令
+        if (ITEM_OF(g_stNorthMbChildCmdTable) == i)
+        {
+            g_stModbusRxMsg.m_eErrorType = ERROR_FUNC;
+        }
+    }
+
+    DRV_Printf("ProcMbManage stop .. \n");
+}
+
+/******************************************************************
+ * Function     :   NorthModbusPackErrorReply
+ * Description  :   北向modbus打包发送错误码回复给主机
+ * Input        :   无
+ * Output       :   无
+ * Return       :   无
+ * Others       :
+******************************************************************/
+static void NorthModbusPackErrorReply(void)
+{
+    DRV_Printf("** ErrorReply **\n");
+    u8  ucCrcIndex;
+    u32 u32EquipAddr = 0;
+
+    MSG_ST TmpTxMsg = {0};
+    TmpTxMsg.length= 0;
+    (void)memset(TmpTxMsg.buf, 0, MODBUS_MSG_BUF_SIZE);
+
+    // 获取当前设备地址
+    u32EquipAddr = Get485EquipAddr();
+	
+    // 打包即将发送的数据包
+    TmpTxMsg.buf[MDS_RDREPLY_ADDR_INDEX] = u32EquipAddr;
+    TmpTxMsg.buf[MDS_RDREPLY_CMD_INDEX]  = g_stModbusRxMsg.m_u8AppCmd + 128;   // TODO: 此处待检视
+    TmpTxMsg.buf[MDS_RDREPLY_BYTE_NUMS_INDEX] = g_stModbusRxMsg.m_eErrorType;
+
+    // 计算crc的位置
+    ucCrcIndex = MDS_RDREPLY_ADDR_LEN + MDS_RDREPLY_CMD_LEN + MDS_RDREPLY_BYTE_NUMS_LEN;
+
+    // 封装crc的值
+    PackMdsTxCrc(TmpTxMsg.buf, ucCrcIndex , 0xFFFF);
+
+    // 更新发送数据长度
+    TmpTxMsg.length= ucCrcIndex + MDS_RDREPLY_CRC_LEN;
+
+    // 将要发送的消息添加到消息发送队列中
+    NorthModbus_In_MsgQueue(&g_stModbusTxQueue, &TmpTxMsg.buf[0], TmpTxMsg.length);
+}
+
+/*******************************************************************************
+* Function Name  	: ModbusRxMsgInterpret
+* Description    	: Modbus接收消息解析
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: 数据格式为:
+*                   1byte    1byte      1byte      nbyte   2byte  
+*                   地址位   功能码     数据长度   data    crc   
+********************************************************************************/
+static void ModbusRxMsgInterpret(void)
+{
+    DRV_Printf("\n** Interpret start **\n");
+    u8   i = 0;
+    u16  u16RecvCRC = 0;
+    u16  u16CalcCRC = 0;
+    u16  u16CalcCRCLength = 0;
+    u32  u32EquipAddr = 0;
+
+    // 打印北向Modbus消息接收队列
+    NorthModbus_Show_MsgQueue(&g_stModbusRxQueue);
+
+    MSG_ST TmpOutMsg = {0};
+    MDS_MSG_QUEUE_NODE_ST OutRxQueueMsg;
+    OutRxQueueMsg.data.m_pMsg = TmpOutMsg.buf;
+
+    // 北向Modbus消息队列出队 -- 获取位于消息队列的一帧数据
+    NorthModbus_Out_MsgQueue(&g_stModbusRxQueue, &OutRxQueueMsg);
+
+    u32EquipAddr = Get485EquipAddr();
+	DRV_Printf("485Addr: %d\n", u32EquipAddr);
+
+
+	/*
+    // TODO: 广播命令不回复, 待确认
+    if (0 == OutRxQueueMsg.data.m_pMsg[MDS_RD_ADDR_INDEX])
+    {
+        return;
+    }
+    */
+
+    // 自身设备地址与接收地址对比
+    if (OutRxQueueMsg.data.m_pMsg[MDS_RD_ADDR_INDEX] != u32EquipAddr)
+    {
+        return;
+    }
+
+    // 获取功能码, 用于回复
+    g_stModbusRxMsg.m_u8AppCmd = OutRxQueueMsg.data.m_pMsg[MDS_RD_CMD_INDEX];
+
+    // CRC校验
+    u16CalcCRCLength = OutRxQueueMsg.data.m_usMsgLenth - M_CRC_LENGTH;
+    // CRC校验码是低位字节在前，高位字节在后
+    u16RecvCRC = BUILD_UINT16(OutRxQueueMsg.data.m_pMsg[u16CalcCRCLength],
+                              OutRxQueueMsg.data.m_pMsg[u16CalcCRCLength + 1]);
+
+    // 计算接受到数据帧的CRC值
+    u16CalcCRC = CalcUsaCrc16ByFunc(OutRxQueueMsg.data.m_pMsg, u16CalcCRCLength, 0xFFFF);
+
+    // 测试数据: 00 41 20 0B 01 08 00 FF FF 00 01 02 03 04 05 50 E3 -- IBAT的广播数据帧
+    DRV_Printf("u16RecvCRC: %X, u16CalcCRC: %X\n",u16RecvCRC, u16CalcCRC);
+
+    if (u16CalcCRC != u16RecvCRC)
+    {
+        g_stModbusRxMsg.m_eErrorType   = ERROR_DATA;
+    }
+    else
+    {
+        //解析命令字, 遍历功能码列表，执行对应功能码命令
+        for (i = 0; i < ITEM_OF(g_stNorthMbCmdTable); i++)
+        {
+            if (g_stModbusRxMsg.m_u8AppCmd == g_stNorthMbCmdTable[i].m_u8Cmd)
+            {
+                DRV_Printf("\n** Interpret cmd **\n");
+                g_stModbusRxMsg.m_eErrorType   = DATA_OK;
+                g_stNorthMbCmdTable[i].m_pFunc((u8 *)&OutRxQueueMsg.data.m_pMsg[0]);
+
+                /* 收到有效命令, 将通信失败定时器置起 */
+                //g_CommInfoSt[COMM_485].u8CommFailCont = TASK_30S_PRE_1S;
+                break;
+            }
+        }
+
+        //判断是否是无效的命令
+        if (ITEM_OF(g_stNorthMbCmdTable) == i)
+        {
+            g_stModbusRxMsg.m_eErrorType = ERROR_FUNC;
+        }
+    }
+
+    //错误时组包, 反馈给主机
+    if (DATA_OK != g_stModbusRxMsg.m_eErrorType)
+    {
+        NorthModbusPackErrorReply();
+    }
+
+    DRV_Printf("\n** Interpret stop **\n");
+}
+
+/*******************************************************************************
+* Function Name  	: NorthModbusMsgSendTask
+* Description    	: 从北向Modbus消息发送队列中取出一帧数据，
+*                   通过RS485(UART0)，发送数据至主机.
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+void NorthModbusMsgSendTask(void)
+{
+    //DRV_Printf("** send **\n");
+    /* 发送错误 */
+    /*
+    if (DMA_GetFlagStatus(DMA1_FLAG_TE4) != RESET)
+    {
+        DMA_ClearFlag(DMA1_FLAG_TE4);
+        g_stModbusComm.m_usTxLenth = 0;
+
+        // 上报消息结束后, 状态切换为接收头
+        SET_UART1_RECEIVE
+        return;
+    }
+
+    // 发送完成 
+    if (DMA_GetFlagStatus(DMA1_FLAG_TC4) != RESET)
+    {
+        DMA_ClearFlag(DMA1_FLAG_TC4);
+        g_stModbusComm.m_usTxLenth = 0;
+        DelayMS(2);
+        SET_UART1_RECEIVE
+    }
+    */
+
+    // 若消息发送队列为空，则退出当前执行函数
+    if (IsMdsMsgQueueEmpty(&g_stModbusTxQueue)) 
+    {
+        return ;
+    }
+
+    MSG_ST TmpOutMsg = {0};
+    MDS_MSG_QUEUE_NODE_ST OutTxQueueMsg;
+    OutTxQueueMsg.data.m_pMsg = TmpOutMsg.buf;
+
+    // 从北向Modbus消息发送队列中取出一帧数据
+    NorthModbus_Out_MsgQueue(&g_stModbusTxQueue, &OutTxQueueMsg);
+
+    // 如果发送帧足够长，才启动RS485(UART0)发送 
+    if ((OutTxQueueMsg.data.m_usMsgLenth >= MODBUS_MIN_FRAME_LENGTH) && 
+        (OutTxQueueMsg.data.m_usMsgLenth <= MODBUS_MAX_FRAME_LENGTH))
+    {
+        // TODO: 此处看是否需要用DMA的方式来发送数据
+        DRV_RS485Send(OutTxQueueMsg.data.m_pMsg, OutTxQueueMsg.data.m_usMsgLenth);
+        DelayMS(5);
+        //DRV_RS485DMASend(OutTxQueueMsg.data.m_pMsg, OutTxQueueMsg.data.m_usMsgLenth);
+        DRV_Printf("-- send done --\n");
+    }
+}
+
+/*******************************************************************************
+* Function Name  	: NorthModbusMsgProcessTask
+* Description    	: 北向Modbus消息处理任务函数，处理从RS485(UART0)接收的数据
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 
+* Others			: None
+********************************************************************************/
+void NorthModbusMsgRecvTask(void)
+{
+    // 若消息接收队列为空，则退出当前执行函数
+    if (IsMdsMsgQueueEmpty(&g_stModbusRxQueue))
+    {
+        return ;
+    }
+    else
+    {
+        WatchdogClear();
+        ModbusRxMsgInterpret();
+    }
+}
