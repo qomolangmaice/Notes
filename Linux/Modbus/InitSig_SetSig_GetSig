@@ -1,0 +1,279 @@
+/********************************************************************************************************************************************************
+                			                                                系统信号全局配置表
+*********************************************************************************************************************************************************
+	u16SigId		                                    u16NvStoregeId                    eValType		u16DefVal		u16DownLimitVal	u16UpLimitVal
+*********************************************************************************************************************************************************/
+const SIG_CFG_ST g_stSysMaintainSignalTable[] = {\
+    // Modbus采集信号
+    {MDS_REG_SIGNAL_SOFTWARE_VERSION,	        BOARD_APP_NV_NOT_RECORD,      TYPE_UINT16,	101,		    0,		        100,   	    },
+    {MDS_REG_SIGNAL_HARDWARE_VERSION,	        BOARD_APP_NV_NOT_RECORD,      TYPE_UINT16,	0,		        0,		        100,   	    },  
+    {MDS_REG_SIGNAL_WIRELESS_DATA_UPDATE_FLAG,	BOARD_APP_NV_NOT_RECORD,      TYPE_UINT16,	0,		        0,		        1,   	    },
+
+    // Modbus设置信号
+    {MDS_REG_SIGNAL_ORGANIZE_NWK,	            BOARD_APP_NV_NOT_RECORD,      TYPE_UINT16,	0,		        0,		        1,   	    },
+
+    // Modbus控制信号
+    {MDS_REG_SIGNAL_CONVERTER_BOARD_RESET,	    BOARD_APP_NV_NOT_RECORD,      TYPE_UINT16,	0,		        0,		        0xFFFF,   	}, 
+    {MDS_REG_SIGNAL_ERASE_NWK_PARAMETER,	    BOARD_APP_NV_NOT_RECORD,      TYPE_UINT16,	0,		        0,		        0xFFFF,   	},  
+
+    // 存储到NV区的信号
+    {NV_SIGNAL_FIRST_RUN_FLAG,	                BOARD_APP_NV_FIRST_RUN_FLAG,  TYPE_UINT16,	0,		        0,		        0xFFFF,   	}, 
+    {NV_SIGNAL_NETWORK_STATE,	                BOARD_APP_NV_NETWORK_STATE,   TYPE_UINT16,	0,		        0,		        1,   	    }, 
+    {NV_SIGNAL_DEV_IN_NET_NUMS,	                BOARD_APP_NV_DEV_IN_NET_NUMS, TYPE_UINT16,	0,		        0,		        300,   	    },
+};
+
+SIG_EXT_VAL g_stSigValTable[ITEM_OF(g_stSysMaintainSignalTable)] = {0};                // 寄存器信号与寄存器值映射表
+
+
+/**************************************************************************************************
+Function: 	 InitSysSigInfo
+Description:  初始化系统所有信号值
+Input: 		 None
+Output: 	     None
+Returns: 	 None
+Author: 	     wwx423495
+Others: 	 
+***************************************************************************************************/
+void InitSysSigInfo(void)
+{
+    u16 i = 0;
+    u8 u8HardwareVer = 0;
+    SIG_EXT_VAL stFirstRunFlagSigVal;
+    SIG_EXT_VAL stTmpSigVal;
+
+    APP_ReadSignalFromNV(NV_SIGNAL_FIRST_RUN_FLAG, (u8 *)&stFirstRunFlagSigVal.uSigVal, sizeof(stFirstRunFlagSigVal.uSigVal));
+
+    // 初始化读系统信号与寄存器值映射表
+    for (i = 0; i < ITEM_OF(g_stSysMaintainSignalTable); i++)
+    {
+        g_stSigValTable[i].u16SigId        = g_stSysMaintainSignalTable[i].u16SigId;
+        g_stSigValTable[i].u16NvStorageId  = g_stSysMaintainSignalTable[i].u16NvStorageId;
+        g_stSigValTable[i].eValType        = g_stSysMaintainSignalTable[i].eValType;
+
+        if (BOARD_APP_NV_NOT_RECORD != g_stSysMaintainSignalTable[i].u16NvStorageId)    // 写NV的信号初始化
+        {
+            // 非首次上电，从E2中读取参数，恢复信号值
+            if (NV_SIGNAL_FIRST_RUN_FLAG != stFirstRunFlagSigVal.uSigVal.u16Val)
+            {
+                    APP_ReadSignalFromNV(g_stSysMaintainSignalTable[i].u16SigId, (u8 *)&stTmpSigVal.uSigVal, sizeof(stTmpSigVal.uSigVal));
+                    g_stSigValTable[i].uSigVal.u16Val = stTmpSigVal.uSigVal.u16Val;
+            }
+            else    //首次上电，将默认值设置到E2中
+            {
+                    stTmpSigVal.uSigVal.u16Val = g_stSysMaintainSignalTable[i].u16DefVal;
+                    Modbus_SetSigVal(g_stSysMaintainSignalTable[i].u16SigId, &stTmpSigVal);
+                    g_stSigValTable[i].uSigVal.u16Val  = g_stSysMaintainSignalTable[i].u16DefVal;
+            } 
+        }
+        else if (MDS_REG_SIGNAL_HARDWARE_VERSION == g_stSysMaintainSignalTable[i].u16SigId)
+        {
+            u8HardwareVer = GetHardwareVersion();
+            g_stSigValTable[i].uSigVal.u16Val = (u16)u8HardwareVer;
+        }
+        else    // 不写NV的信号初始化
+        {
+            g_stSigValTable[i].uSigVal.u16Val  = g_stSysMaintainSignalTable[i].u16DefVal;
+        }      
+    }
+
+    // TODO: 初始化软件版本号信号值以及初始化硬件版本号信号值
+}
+
+/*******************************************************************************
+* Function Name  : Modbus_GetSigVal
+* Description    : 获取信号值
+* Input          : eBrdType:单板类型
+	               u16SigId:信号ID
+* Output         : pstSigVal:采样信号值指针
+* Return         : 成功或失败
+* Author         : wwx423495
+*******************************************************************************/
+BOOL Modbus_GetSigVal( IN u16 u16SigId, OUT SIG_EXT_VAL* pstSigVal)
+{
+    u16 i;
+    BOOL  bRet = FALSE;
+    SIG_EXT_VAL* pSamSigVal = NULL;
+
+    // 寄存器的信号范围
+    if (u16SigId >= SYS_SIGNAL_START_ID && u16SigId <= SYS_SIGNAL_END_ID)
+    {
+        pSamSigVal = g_stSigValTable;
+
+        for (i = 0; i < ITEM_OF(g_stSysMaintainSignalTable); i++, pSamSigVal++)
+        {
+            if (pSamSigVal->u16SigId == u16SigId)
+            {
+                (void)memcpy(pstSigVal, pSamSigVal, sizeof(SIG_EXT_VAL));
+                //DRV_Printf("Modbus_GetSigVal -- pstSigVal->uSigVal.u16Val = %X\n", pstSigVal->uSigVal.u16Val);
+                bRet = TRUE;
+                break;
+            }
+        }
+    }
+    else
+    {
+        DRV_Printf("u16SigId is not a valid signal!\n");
+    }
+
+    return bRet;
+}
+
+
+/*******************************************************************************
+* Function Name  : SetSigVal
+* Description    : 设置设置信号的值
+* Input          : u16SigId:信号ID
+	               pstSigVal:采样信号值指针
+* Output         : None
+* Return         : None
+* Author         : wwx423495
+*******************************************************************************/
+BOOL Modbus_SetSigVal( IN u16 u16SigId, IN SIG_EXT_VAL* pstSigVal)
+{
+    //DRV_Printf("Modbus_SetSigVal start\n");
+    u16 i;
+
+    BOOL  bRet = FALSE;
+    const SIG_CFG_ST* pCfgSigVal  = g_stSysMaintainSignalTable;
+    SIG_EXT_VAL*      pSetSigVal  = g_stSigValTable;
+
+
+    for (i = 0; i < ITEM_OF(g_stSysMaintainSignalTable); i++, pCfgSigVal++, pSetSigVal++)
+    {
+        if (pCfgSigVal->u16SigId == u16SigId)
+        {
+            switch (pCfgSigVal->eValType)
+            {
+                case TYPE_BOOL:
+                {
+                    if (pSetSigVal->uSigVal.bVal == pstSigVal->uSigVal.bVal)
+                    {
+                        bRet = TRUE;
+                        return bRet;
+                    }
+                    else
+                    {
+                        if (((float)(pstSigVal->uSigVal.bVal) >= pCfgSigVal->u16DownLimitVal)
+                            && ((float)(pstSigVal->uSigVal.bVal) <= pCfgSigVal->u16UpLimitVal))
+                        {
+                            pSetSigVal->uSigVal.bVal = pstSigVal->uSigVal.bVal;
+                        }
+                        else
+                        {
+                            bRet = FALSE;
+                            return bRet;
+                        }
+                    }
+                }
+                break;
+
+                case TYPE_UINT16:
+                {
+                    if (pSetSigVal->uSigVal.u16Val	== pstSigVal->uSigVal.u16Val)
+                    {
+                        bRet = TRUE;
+                        return bRet;
+                    }
+                    else
+                    {
+                        if (((float)(pstSigVal->uSigVal.u16Val) >= pCfgSigVal->u16DownLimitVal)
+                            && ((float)(pstSigVal->uSigVal.u16Val) <= pCfgSigVal->u16UpLimitVal))
+                        {
+                            pSetSigVal->uSigVal.u16Val = pstSigVal->uSigVal.u16Val;
+                        }
+                        else
+                        {
+                            bRet = FALSE;
+                            return bRet;
+                        }
+                    }
+                }
+                break;
+
+                case TYPE_UINT32:
+                {
+
+                    if (pSetSigVal->uSigVal.u32Val == pstSigVal->uSigVal.u32Val)
+                    {
+                        bRet = TRUE;
+                        return bRet;
+                    }
+                    else
+                    {
+                        if (((float)(pstSigVal->uSigVal.u32Val) >= pCfgSigVal->u16DownLimitVal)
+                            && ((float)(pstSigVal->uSigVal.u32Val) <= pCfgSigVal->u16UpLimitVal))
+                        {
+                            pSetSigVal->uSigVal.u32Val = pstSigVal->uSigVal.u32Val;
+                        }
+                        else
+                        {
+                            bRet = FALSE;
+                            return bRet;
+                        }
+                    }
+                }
+                break;
+
+                case TYPE_UINT8:
+                {
+                    if (pSetSigVal->uSigVal.u8Val == pstSigVal->uSigVal.u8Val)
+                    {
+                        bRet = TRUE;
+                        return bRet;
+                    }
+                    else
+                    {
+                        if (((float)(pstSigVal->uSigVal.u8Val) >= pCfgSigVal->u16DownLimitVal)
+                            && ((float)(pstSigVal->uSigVal.u8Val) <= pCfgSigVal->u16UpLimitVal ))
+                        {
+                            pSetSigVal->uSigVal.u8Val = pstSigVal->uSigVal.u8Val;
+                        }
+                        else
+                        {
+                            bRet = FALSE;
+                            return bRet;
+                        }
+                    }
+                }
+                break;
+
+                case TYPE_FLOAT:
+                {
+                    if (pSetSigVal->uSigVal.fVal == pstSigVal->uSigVal.fVal)
+                    {
+                        bRet = TRUE;
+                        return bRet;
+                    }
+                    else
+                    {
+                        if ((pstSigVal->uSigVal.fVal >= pCfgSigVal->u16DownLimitVal)
+                            && (pstSigVal->uSigVal.fVal <= pCfgSigVal->u16UpLimitVal ))
+                        {
+                            pSetSigVal->uSigVal.fVal = pstSigVal->uSigVal.fVal;
+                        }
+                        else
+                        {
+                            bRet = FALSE;
+                            return bRet;
+                        }
+                    }
+                }
+                break;
+
+                default:
+                {
+                    bRet = FALSE;
+                    return bRet;
+                }
+            }
+
+            // 根据信号类型判断是否需要将信号对应的值存储到NV区
+            APP_WriteSignalToNV(u16SigId, (u8 *)&pSetSigVal->uSigVal, sizeof(SIG_PHY_VAL));
+
+            bRet = TRUE;
+            break;
+        }
+    }
+
+    return bRet;
+}
