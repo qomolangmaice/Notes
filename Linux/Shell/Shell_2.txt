@@ -1,0 +1,304 @@
+
+/*******************************************************************************
+* Function Name  	: NormalKeyProc
+* Description    	: 可见字符按键处理
+* Input          	: key -- 普通按键
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void NormalKeyProc(u32 key)
+{
+	u32 x;
+
+	if ((EditPos == 0) && (InsPos == 0) && (key == '?'))
+	{
+		RunCommand("help");
+		DRV_Printf( "%s%s%s", Prompt, SecPrompt, ThirPrompt);
+		return;
+	}
+
+	if (EditPos == InsPos)
+	{
+		command[EditPos++] = (char)key;
+		(void)putch( key );
+		InsPos++;
+	}
+	else
+	{
+		for (x = EditPos; x > InsPos; x--)
+		{
+			command[x] = command[x - 1];
+		}
+
+		command[InsPos] = (char)key;
+		EditPos++;
+		for (x = InsPos; x < EditPos; x++)
+		{
+			(void)putch( command[x] );
+		}
+
+		InsPos++;
+		for (x = 0; x < (u32)(EditPos - InsPos); x++)
+		{
+			(void)putch( 0x1b );
+			(void)putch( 0x5b );
+			(void)putch( LEFT_KEY );
+		}
+	}
+
+	command[EditPos] = '\0';
+}
+
+/**************************************************************************************************
+Function: 	JudgeNormalKeyValid
+Description:判断可见字符是否有效
+Input: 		key
+Output: 	None
+Returns: 	1--有效，其他--无效
+Author: 	
+Others: 	None
+***************************************************************************************************/
+static BOOL JudgeNormalKeyValid(s32 key)
+{
+	return (BOOL)((key >= 0x20) && (key <= 0x7e) && (EditPos < (MAX_CMD_LEN - 1)));
+}
+
+/*******************************************************************************
+* Function Name  	: DRV_ShellEnterMenu
+* Description    	: 进入特定命令菜单
+* Input          	: pCmd_menu -- 次级菜单的起始地址
+					  pSecPromt -- 次级菜单的描述
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+void DRV_ShellEnterMenu(const CMD_MENU *pCmd_menu, const char *pSecPromt)
+{
+	s32 index;
+
+	index = GetCmdMatche(pSecPromt);
+	SecPrompt = pCmdTable[index].cmd;
+	pLastCMD = pCMD;
+	pCMD = pCmd_menu;
+	DRV_ShellHelp(0, 0);
+}
+
+/*******************************************************************************
+* Function Name  	: ExitCurrentMenu
+* Description    	: 退出当前命令菜单,返回上一级菜单
+* Input          	: None
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void ExitCurrentMenu(void)
+{
+	pCMD = pLastCMD;
+	DRV_ShellHelp(0, 0);
+	SecPrompt = "\0";
+}
+
+/*******************************************************************************
+* Function Name  	: DRV_ShellHelp
+* Description    	: 打印后台帮助信息
+* Input          	: argc	-- 接收命令个数
+					  argv	-- 接收命令内容
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+void DRV_ShellHelp(int argc, char * argv[])
+{
+	int i;
+
+	DRV_Printf("\n");
+	for (i = 0; pCMD[i].cmd != NULL; i++)
+	{
+		if (pCMD[i].hlp != NULL)
+		{
+			DRV_Printf( "%-12s  : %s\n", pCMD[i].cmd, pCMD[i].hlp );
+			//DRV_Printf( "%s  : %s\r\r\n", pCMD[i].cmd, pCMD[i].hlp );
+		}
+	}
+
+	return;
+}
+
+/*******************************************************************************
+* Function Name  	: DRV_ShellExit
+* Description    	: 退出当前菜单
+* Input          	: argc	-- 接收命令个数
+					  argv	-- 接收命令内容
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+void DRV_ShellExit(int argc, char * argv [])
+{
+	ExitCurrentMenu();
+}
+
+/*******************************************************************************
+* Function Name  	: DRV_ShellProcRecvKey
+* Description    	: 字符处理函数
+* Input          	: key -- 从命令行输入的字符
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+void DRV_ShellProcRecvKey(s32 key)
+{
+	switch (key)
+	{
+	case ENTER_KEY:
+		EnterKeyProc();
+		break;
+	case BACK_KEY:
+	case 0x7F:
+		BackKeyProc();
+		break;
+	case 0x1b:
+		key = DRV_ShellGetChar();
+		if (key != 0x5b)
+		{
+			break;
+		}
+
+		key = DRV_ShellGetChar();
+		if (key == RIGHT_KEY)
+		{
+			RightKeyProc();
+		}
+		else if (key == LEFT_KEY)
+		{
+			LeftKeyProc();
+		}
+		else if (key == HOME_KEY)
+		{
+			HomeKeyProc();
+		}
+		else if (key == END_KEY)
+		{
+			EndKeyProc();
+		}
+		else if (key == UP_KEY)
+		{
+			UPKeyProc();
+		}
+		else if (key == DOWN_KEY)
+		{
+			DownKeyProc();
+		}
+
+		break;
+	default:
+
+		if (JudgeNormalKeyValid(key) == TRUE)
+		{
+			NormalKeyProc((u32)key);
+		}
+
+		break;
+	}
+}
+
+/*******************************************************************************
+* Function Name  	: DRV_Printf
+* Description    	: 格式化输出打印函数
+* Input          	: pFmt -- 将要格式化输出的字符串
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+void DRV_Printf(const char *pFmt, ...)//u16 u16MoudleId, 
+{
+	u16 i = 0;
+
+	va_list argptr;	
+
+	va_start(argptr, pFmt);			
+	vsnprintf(s_ucPrintBuf, MAX_LINE_SIZE, pFmt, argptr);
+	s_ucPrintBuf[MAX_LINE_SIZE-1] = 0;     
+	va_end(argptr);
+
+	for (i = 0; i < strlen(s_ucPrintBuf); i++)
+	{
+		DRV_ShellSendChar(s_ucPrintBuf[i]);
+	}
+}
+
+/*******************************************************************************
+* Function Name  	: PrintFrameData
+* Description    	: 每行按16个字节打印数据
+* Input          	: u32FrameLen - 数据帧长度
+*                   pu8FrameData -- 数据帧指针
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void PrintOneLineData(u32 u32FrameLen, u8* pu8FrameData)
+{
+    u32 i = 0;
+    for (i = 0; i < u32FrameLen; i++)
+	{
+		if (*pu8FrameData < 16)
+		{
+			DRV_Printf("0%X ", *pu8FrameData);
+		}
+		else
+		{
+			DRV_Printf("%X ", *pu8FrameData);
+		}
+		pu8FrameData++;
+	}
+}
+
+/*******************************************************************************
+* Function Name  	: PrintFrameData
+* Description    	: 每行按16个字节打印数据, 最后一行只打印有效数据部分
+* Input          	: u32FrameLen - 数据帧长度
+*                   pu8FrameData -- 数据帧指针
+* Output         	: None
+* Return         	: None
+* Author			: 	
+* Others			: None
+********************************************************************************/
+void PrintFrameData(u32 u32FrameLen, u8* pu8FrameData)
+{
+    u32 i = 0, j = 0;
+	DRV_Printf("\n\nu32FrameLen: %d\n", u32FrameLen);
+
+	if (u32FrameLen <= 16)
+	{
+	    DRV_Printf("0x%X: ", pu8FrameData);
+        PrintOneLineData(u32FrameLen, pu8FrameData);
+	}
+	else
+	{
+	    // 先打印16倍数的部分
+        for (i = 0; i < u32FrameLen / 16; i++)
+    	{
+    	    DRV_Printf("0x%X: ", pu8FrameData);
+    		PrintOneLineData(16, pu8FrameData);
+    		pu8FrameData += 16;
+        	DRV_Printf("\n");
+    	}
+
+        // 再打印16余数的部分
+    	if (u32FrameLen % 16 != 0)
+    	{
+    	    DRV_Printf("0x%X: ", pu8FrameData);
+    	    PrintOneLineData(u32FrameLen % 16, pu8FrameData);
+    	}
+	}
+	DRV_Printf("\n\n");
+}
