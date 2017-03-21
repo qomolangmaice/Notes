@@ -1,0 +1,307 @@
+/*******************************************************************************
+* Function Name  	: EnterKeyProc
+* Description    	: 回车键处理
+* Input          	: None
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void EnterKeyProc(void)
+{
+	if (FALSE == s_ulSetParaFlag) //命令模式
+	{
+		DRV_Printf( "\n" );
+		if (EditPos)
+		{
+			RunCommand( command);
+			CurrentCmdPos = (CurrentCmdPos + 1) % MAX_CMD_HISTORY;
+			HistoryCmdPos = CurrentCmdPos;
+			command = H_command[CurrentCmdPos];
+		}
+	}
+	else                        //参数设置模式
+	{
+		if (EditPos == 0)
+		{
+			return;
+		}
+
+		if (SetParaCallBack != NULL)
+		{
+			SetParaCallBack(command);
+		}
+	}
+
+	if (FALSE == s_ulSetParaFlag)
+	{
+		DRV_Printf( "%s%s%s", Prompt, SecPrompt, ThirPrompt);
+	}
+
+	EditPos = 0;
+	InsPos = 0;
+}
+
+/*******************************************************************************
+* Function Name  	: BackKeyProc
+* Description    	: 退格键处理
+* Input          	: None
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void BackKeyProc(void)
+{
+	u32 x;
+
+	if (0 == InsPos)
+	{
+		(void)putch(BEEP_KEY);
+		return;
+	}
+
+	if (EditPos == InsPos)
+	{
+		EditPos--;
+		InsPos--;
+		DRV_Printf( "\b \b" );
+	}
+	else
+	{
+		EditPos--;
+		InsPos--;
+		for (x = InsPos; x < EditPos; x++)
+		{
+			command[x] = command[x + 1];
+		}
+
+		command[x] = ' ';
+		DRV_Printf( "\b \b" );
+		for (x = InsPos; x < EditPos + 1; x++)
+		{
+			(void)putch(command[x]);
+		}
+
+		for (x = 0; x < (u32)(EditPos + 1 - InsPos); x++)
+		{
+			(void)putch( 0x1b );
+			(void)putch( 0x5b );
+			(void)putch( LEFT_KEY );
+		}
+	}
+
+	command[EditPos] = '\0';
+}
+
+/*******************************************************************************
+* Function Name  	: RightKeyProc
+* Description    	: 向右方向键处理
+* Input          	: None
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void RightKeyProc(void)
+{
+	if (InsPos == EditPos)
+	{
+		(void)putch( BEEP_KEY );
+		return;
+	}
+
+	(void)putch( 0x1b );
+	(void)putch( 0x5b );
+	(void)putch( RIGHT_KEY );
+	InsPos++;
+}
+
+/*******************************************************************************
+* Function Name  	: LeftKeyProc
+* Description    	: 向左方向键处理
+* Input          	: None
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void LeftKeyProc(void)
+{
+	if (InsPos == 0)
+	{
+		(void)putch( 0x1b );
+		(void)putch( 0x5b );
+		(void)putch( BEEP_KEY );
+		return;
+	}
+
+	(void)putch( 0x1b );
+	(void)putch( 0x5b );
+	(void)putch( LEFT_KEY );
+	InsPos--;
+}
+
+/*******************************************************************************
+* Function Name  	: HomeKeyProc
+* Description    	: HOME键处理
+* Input          	: None
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void HomeKeyProc(void)
+{
+	u32 x;
+
+	for (x = 0; x < InsPos; x++)
+	{
+		(void)putch( 0x1b );
+		(void)putch( 0x5b );
+		(void)putch( LEFT_KEY );
+	}
+
+	InsPos = 0;
+}
+
+/*******************************************************************************
+* Function Name  	: EndKeyProc
+* Description    	: End键处理
+* Input          	: None
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void EndKeyProc(void)
+{
+	u32 x;
+
+	for (x = InsPos; x < EditPos; x++)
+	{
+		(void)putch( 0x1b );
+		(void)putch( 0x5b );
+		(void)putch( RIGHT_KEY );
+	}
+
+	InsPos = EditPos;
+}
+
+/*******************************************************************************
+* Function Name  	: UPKeyProc
+* Description    	: UP键处理
+* Input          	: None
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void UPKeyProc(void)
+{
+	u32 x;
+	u32 cmd_len;
+	u16 save_pos;
+
+	save_pos = HistoryCmdPos;
+	if (0 == HistoryCmdPos)
+	{
+		HistoryCmdPos = MAX_CMD_HISTORY - 1;
+	}
+	else
+	{
+		HistoryCmdPos--;
+	}
+
+	if (HistoryCmdPos == CurrentCmdPos)
+	{
+		HistoryCmdPos = save_pos;
+		(void)putch(BEEP_KEY);
+		return;
+	}
+
+	cmd_len = strlen( H_command[HistoryCmdPos] );
+
+	memcpy(command, (char *)H_command[HistoryCmdPos], cmd_len + 1);
+
+	for (x = 0; x < InsPos; x++)
+	{
+		//回到行首
+		(void)putch( 0x1b );
+		(void)putch( 0x5b );
+		(void)putch( LEFT_KEY );
+	}
+
+	for (x = 0; x < cmd_len; x++)
+	{
+		(void)putch( command[x] );
+	}
+
+	for (; x < EditPos; x++)
+	{
+		(void)putch( ' ' );
+	}
+
+	for (; x > cmd_len; x--)
+	{
+		(void)putch( 0x1b );
+		(void)putch( 0x5b );
+		(void)putch( LEFT_KEY );
+	}
+
+	EditPos = InsPos = (u16)cmd_len;
+}
+
+/*******************************************************************************
+* Function Name  	: DownKeyProc
+* Description    	: Down键处理
+* Input          	: None
+* Output         	: None
+* Return         	: static void
+* Author			: 	
+* Others			: None
+********************************************************************************/
+static void DownKeyProc(void)
+{
+	u32 x;
+	u32 cmd_len;
+
+	if (HistoryCmdPos == CurrentCmdPos)
+	{
+		(void)putch(BEEP_KEY);
+		return;
+	}
+
+	HistoryCmdPos++;
+	HistoryCmdPos %= MAX_CMD_HISTORY;
+
+	cmd_len = strlen( H_command[HistoryCmdPos] );
+	memcpy(command, (char *)H_command[HistoryCmdPos], cmd_len + 1);
+
+	for (x = 0; x < InsPos; x++)
+	{
+		//回到行首
+		(void)putch( 0x1b );
+		(void)putch( 0x5b );
+		(void)putch( LEFT_KEY );
+	}
+
+	for (x = 0; x < cmd_len; x++)
+	{
+		(void)putch( command[x] );
+	}
+
+	for (; x < EditPos; x++)
+	{
+		(void)putch( ' ' );
+	}
+
+	for (; x > cmd_len; x--)
+	{
+		(void)putch( 0x1b );
+		(void)putch( 0x5b );
+		(void)putch( LEFT_KEY );
+	}
+
+	EditPos = InsPos = (u16)cmd_len;
+}
