@@ -1,0 +1,433 @@
+/****************************************************************************
+File name: 	NorthModbusComm.h
+Author: 	
+Version: 	 V1.0	Date: 2017-02-28
+Description:  北向Modbus通信函数头文件
+Others: 		无
+History:
+****************************************************************************/
+#ifndef __NORTHMODBUSCOMM_H__
+#define __NORTHMODBUSCOMM_H__
+
+#include "sys_types.h"
+#include "NorthModbusMsgQueue.h"
+
+/*******************************************************************************
+                				    定义可外部使用的宏
+*******************************************************************************/
+#define ZD_APP_NV_FIRST_RUN_FLAG	0x0401  // 首次上电标志位
+
+#define MAX_MSG_MEMORY_SIZE         512	 
+
+#define MODBUS_MIN_FRAME_LENGTH     ((u8)5)		// 最短帧长度(包括接受和发送) 
+#define MODBUS_MAX_FRAME_LENGTH 	256         // 最长帧长度(包括接受和发送)
+
+//命令帧上限值
+#define  MAX_REG_NUM 		((u8)64)            // 最大寄存器个数 
+#define  MIN_REG_NUM 		((u8)1)	            // 最小寄存器个数 
+#define  M_CRC_LENGTH 	    ((u8)2)	            // CRC长度
+
+// 当功能码域的高比特位置为1 时(相当于+128), 说明此时的数据帧为异常响应
+#define  MDS_ERR_CMD_INDEX      128 
+
+// 读命令格式各个偏移
+#define MDS_RD_ADDR_INDEX           0
+#define MDS_RD_CMD_INDEX            1
+#define MDS_FILE_CMD_INDEX          2
+
+#define MDS_RD_REG_ST_ADDR_INDEX    2       // MSB 	LSB
+#define MDS_RD_REGS_NUM_INDEX       4       // MSB 	LSB 
+#define MDS_RD_CRC_INDEX            6       // LSB   MSB 	
+
+// 读命令回复格式各个长度
+#define MDS_RDREPLY_ADDR_LEN            1
+#define MDS_RDREPLY_CMD_LEN             1
+#define MDS_RDREPLY_BYTE_NUMS_LEN       1
+#define MDS_RDREPLY_VAL_ST_ADDR_LEN     2
+#define MDS_RDREPLY_CRC_LEN             2
+// 读命令回复格式各个偏移
+#define MDS_RDREPLY_ADDR_INDEX          0
+#define MDS_RDREPLY_CMD_INDEX           1
+#define MDS_RDREPLY_BYTE_NUMS_INDEX     2
+#define MDS_RDREPLY_REG_ST_ADDR_INDEX   3   // 回复寄存器的起始地址
+#define MDS_RDREPLY_VAL_ST_ADDR_INDEX   5   // 回复数据的第一个寄存器地址
+
+// 单寄存器写命令回复格式各个长度
+#define MDS_SINGLE_WD_ADDR_LEN          1
+#define MDS_SINGLE_WD_CMD_LEN           1
+#define MDS_SINGLE_WD_REG_ADDR_LEN      2
+#define MDS_SINGLE_WD_REG_VAL_LEN       2
+#define MDS_SINGLE_WD_CRC_LEN           2
+
+// 单寄存器写命令回复格式各个偏移
+#define MDS_SINGLE_WD_ADDR_INDEX        0
+#define MDS_SINGLE_WD_CMD_INDEX         1
+#define MDS_SINGLE_WD_REG_ADDR_INDEX    2
+#define MDS_SINGLE_WD_REG_VAL_INDEX     4
+#define MDS_SINGLE_WD_CRC_INDEX         6
+
+// 管理命令 -- 子功能码偏移
+#define MDS_MANAGE_CHILD_CMD_INDEX      2
+
+// 文件上传相关宏
+#define MDS_REPLY_CRC_LEN                           2
+#define MDS_FILE_UPLOAD_MAX_FRAME_LEN               119
+
+// 设备的软件ID -- 用于区分设备类型
+#define ZIGBEE_GENERAL_CLUSTER_ID                       0       // TODO: Zigbee通用命令ID
+#define IBAT_SOFTWARE_ID                                1       // TODO: IBAT的软件ID待定
+#define WIRELESS_ELECTRICITY_METER_SOFTWARE_ID          2       // TODO: 无线电表的软件ID待定
+
+// 设备的簇ID
+#define WIRELESS_ELECTRICITY_METER_CLUSTER_ID           0x23    // TODO: 无线电表设备的簇ID待定
+
+// 北向Modbus透传数据内容的各个偏移
+#define MDS_TRANSPARENT_TRANSFER_DATA_LEN_INDEX         3   // 透传数据中的北向Modbus透传数据长度偏移
+#define MDS_TRANSPARENT_TRANSFER_DEV_SOFTWARE_ID_INDEX  4   // 透传数据中的设备的软件ID偏移
+#define MDS_TRANSPARENT_TRANSFER_DEV_DATA_LEN_INDEX     6   // 透传数据中的设备的数据长度偏移
+#define MDS_TRANSPARENT_TRANSFER_DEV_NET_ADDR_INDEX     8   // 透传数据中的设备网络地址偏移
+#define MDS_TRANSPARENT_TRANSFER_DEV_DATA_INDEX         10   // 透传数据中的设备真正透传数据的偏移
+
+// 写单个寄存器 -- 设置信号
+#define ZIGBEE_CLOSE_NWK            0           // 关闭组网
+#define ZIGBEE_OPEN_NWK             1           // 开启组网
+
+// 写单个寄存器 -- 控制信号
+#define BOARD_RESET                 0xA5A5     // 单板复位
+#define ERASE_NWK_PARAMETER         0xA5A5     // Zigbee转换板擦除网络参数
+
+#define AF_DATA_REFRESH_FLAG_YES      (u16)1	 /* 数据有更新          */ 
+#define AF_DATA_REFRESH_FLAG_NO       (u16)0	 /* 数据没有更新          */ 
+
+#define MAX_LOAD_DATA_LENGTH 	((u8)119)   // 最大加载数据长度
+#define MIN_LOAD_DATA_LENGTH 	((u8)1)	     // 最小加载数据长度
+
+#define LOAD_ACTIVATE_RESPOND_CODE_NOT_QUERY_PROGRESS    0   // 主节点收到此响应后无需查询进度
+#define LOAD_ACTIVATE_RESPOND_CODE_QUERY_PROGRESS        1   // 主节点收到此响应后需要查询进度
+
+// 主从协议与主机通信时, 监控的链路状态
+// 指目前modbus的主机(从机) 处于发送或者接收的状态
+typedef enum            
+{
+    MDS_SEND = 1,           // 收到合法命令后置起或超时置起
+    MDS_RECEIVE = 2,        // 准备接受数据状态
+}MDS_COMM_STATE_E;
+
+// 功能码
+typedef enum 
+{
+    MODBUS_READ_CMD           = 0x03,  // 读命令 -- 支持单个和多个寄存器连续读取
+    MODBUS_WRITE_SINGLE_CMD   = 0x06,  // 写单个寄存器命令 -- 支持多寄存器连续写动作  
+    MODBUS_WRITE_MULTI_CMD    = 0x10,  // 写多个寄存器命令 -- 支持单寄存器连续写动作
+    MODBUS_READ_EQUIP_ID_CMD  = 0x2B,  // 读设备识别码 -- 获取设备类型和版本号
+    MODBUS_MANAGE_CMD         = 0x41,  // 设备管理 -- 支持加载、文件传输、消息透传
+} NORTH_MODBUS_CMD_E;
+
+// 子功能码
+typedef enum 
+{
+    MODBUS_UPDATE_REQUEST_CHILD_CMD               = 0x07,  // 升级请求
+    MODBUS_LOAD_START_CHILD_CMD                   = 0x01,  // 启动加载命令
+    MODBUS_LOAD_DATA_CHILD_CMD                    = 0x02,  // 下发数据帧命令
+    MODBUS_LOAD_FINISH_CHILD_CMD                  = 0x03,  // 加载结束命令
+    MODBUS_LOAD_ACTIVATE_CHILD_CMD                = 0x04,  // 激活版本命令
+    MODBUS_QUERY_ACTIVATE_PROGRESS_CHILD_CMD      = 0x0D,  // 查询激活进度命令
+    MODBUS_QUERY_VERSION_CHILD_CMD                = 0x08,  // 查询版本命令
+    MODBUS_FILE_UPLOAD_START_CHILD_CMD            = 0x05,  // 上传文件启动命令
+    MODBUS_FILE_UPLOAD_DATA_CHILD_CMD             = 0x06,  // 上传数据命令
+    MODBUS_FILE_UPLOAD_DATA_FINISH_CHILD_CMD      = 0x0C,  // 上传文件完成命令
+    MODBUS_QUERY_FILE_TYPE_CHILD_CMD              = 0x09,  // 查询文件类型列表命令
+    MODBUS_CLEAR_ALARM_CHILD_CMD                  = 0x0A,  // 告警清除命令
+    MODBUS_DATA_TRANSPARENT_TRANSFER_CHILD_CMD    = 0x20,  // 数据透传命令
+} NORTH_MODBUS_CHILD_CMD_E;
+
+// 错误码类别
+typedef enum 
+{
+    DATA_OK = 0,
+    ERROR_FUNC = 1,
+    ERROR_ADDRESS,
+    ERROR_DATA,
+
+    LOAD_START_ERR1 = 0x91,
+	LOAD_START_ERR2,
+	LOAD_START_ERR3,
+	
+    LOAD_DATA_ERR1 = 0xA1,
+    LOAD_DATA_ERR2,
+    LOAD_DATA_ERR3,
+    LOAD_DATA_ERR4,
+    LOAD_DATA_ERR5,
+    LOAD_DATA_ERR6,
+
+    LOAD_END_ERR1 = 0xB1,
+    LOAD_END_ERR2,
+    LOAD_END_ERR3,
+    LOAD_END_ERR4,
+    LOAD_END_ERR5,
+
+    LOAD_ACTIVE_ERR1 = 0xC1,
+    LOAD_ACTIVE_ERR2,
+    LOAD_ACTIVE_ERR3,
+    LOAD_ACTIVE_ERR4,
+
+	UPLOAD_START_ERR1 = 0xD1,
+    UPLOAD_START_ERR2,
+    UPLOAD_START_ERR3,
+    UPLOAD_START_ERR4,
+    UPLOAD_START_ERR5,
+
+    UPLOAD_DATA_ERR1  = 0xE1,
+    UPLOAD_DATA_ERR2,
+    UPLOAD_DATA_ERR3,
+    UPLOAD_DATA_ERR4,
+    UPLOAD_DATA_ERR5,
+    UPLOAD_DATA_ERR6,
+    
+    UPLOAD_END_ERR1  = 0xF1,
+    UPLOAD_END_ERR2,
+    UPLOAD_END_ERR3,
+}MDS_ERROR_TYPE_E;
+
+typedef enum
+{
+    BOARD_APP_FILE             = 0xB5,          // 单板升级程序包
+    BOARD_ELABEL_FILE          = 0xAB,          // 单板电子标签文件
+    RUN_LOG_FILE               = 0xA9,          // 运行日志文件
+    WIRELESS_DATA_FILE         = 0x90,          // 无线数据文件      // TODO:无线数据文件编码待定!!!
+} FILE_TYPE_E;
+
+typedef enum 
+{
+    LOAD_START_BOARD_INDEX           = 0,
+    LOAD_START_FUN_CODE_INDEX        = 1,
+    LOAD_START_SUB_FUN_CODE_INDEX    = 2,
+    LOAD_START_DATA_LEN_INDEX        = 3,
+    LOAD_START_FILE_TYPE_INDEX       = 4,
+    LOAD_START_FILE_LEN_INDEX        = 5,
+    LOAD_START_LOAD_FRAME_LEN_INDEX  = 9,
+    LOAD_START_CRC_INDEX             = 10,
+    
+    LOAD_START_DATA_LEN              = 6,
+    LOAD_START_REPLY_DATA_LEN        = 12,
+}LOAD_FILE_START_E;
+
+typedef enum 
+{
+    LOAD_DATA_BOARD_INDEX          = 0,
+    LOAD_DATA_FUN_CODE_INDEX       = 1,
+    LOAD_DATA_SUB_FUN_CODE_INDEX   = 2,
+    LOAD_DATA_DATA_LEN_INDEX       = 3,
+    LOAD_DATA_FILE_TYPE_INDEX      = 4,
+    LOAD_DATA_FRAME_NO_INDEX       = 5,
+    LOAD_DATA_LOAD_FRAME_LEN_INDEX = 7,
+    LOAD_DATA_DATA_INDEX           = 8,
+    LOAD_DATA_CRC_INDEX            = 8,
+
+    LOAD_DATA_DATA_LEN            = 4,
+    LOAD_DATA_REPLY_DATA_LEN      = 4,
+}LOAD_FILE_DATA_E;
+
+typedef enum 
+{
+    LOAD_END_BOARD_INDEX        = 0,
+    LOAD_END_FUN_CODE_INDEX     = 1,
+    LOAD_END_SUB_FUN_CODE_INDEX = 2,
+    LOAD_END_DATA_LEN_INDEX     = 3,
+    LOAD_END_FILE_TYPE_INDEX    = 4,
+    LOAD_END_FILE_CRC_INDEX     = 5,
+    LOAD_END_CRC_INDEX          = 7,
+    
+    LOAD_END_DATA_LEN          = 3,
+    LOAD_END_REPLY_DATA_LEN    = 9,
+}LOAD_FILE_END_E;
+
+typedef enum 
+{
+    LOAD_ACTIVE_BOARD_INDEX        = 0,
+    LOAD_ACTIVE_FUN_CODE_INDEX     = 1,
+    LOAD_ACTIVE_SUB_FUN_CODE_INDEX = 2,
+    LOAD_ACTIVE_DATA_LEN_INDEX     = 3,
+    LOAD_ACTIVE_FILE_TYPE_INDEX    = 4,
+    LOAD_ACTIVE_BACK_CODE_INDEX    = 5,
+    LOAD_ACTIVE_SEND_CRC_INDEX     = 5,
+    LOAD_ACTIVE_CRC_INDEX          = 6,
+
+    LOAD_ACTIVE_DATA_LEN           = 1,    
+    LOAD_ACTIVE_REPLY_LEN          = 2,
+    LOAD_ACTIVE_SEND_DATA_LEN      = 7,
+    LOAD_ACTIVE_REPLY_DATA_LEN     = 8,
+} LOAD_FILE_ACTIVE_E;
+
+typedef enum 
+{
+    UPLOAD_START_BOARD_INDEX            = 0,
+    UPLOAD_START_FUN_CODE_INDEX         = 1,
+    UPLOAD_START_SUB_FUN_CODE_INDEX     = 2,
+    UPLOAD_START_DATA_LEN_INDEX         = 3,
+    UPLOAD_START_FILE_TYPE_INDEX        = 4,
+    UPLOAD_START_FILE_LEN_INDEX         = 5,
+    UPLOAD_START_LOAD_FRAME_LEN_INDEX   = 9,
+    UPLOAD_START_CRC_INDEX              = 10,
+    
+    UPLOAD_START_DATA_LEN               = 1,
+    UPLOAD_START_REPLY_DATA_DATA_LEN    = 8,
+    UPLOAD_START_REPLY_DATA_LEN         = 12,
+} UPLOAD_FILE_START_E;
+
+typedef enum 
+{
+    UPLOAD_DATA_BOARD_INDEX        = 0,
+    UPLOAD_DATA_FUN_CODE_INDEX     = 1,
+    UPLOAD_DATA_SUB_FUN_CODE_INDEX = 2,
+    UPLOAD_DATA_DATA_LEN_INDEX     = 3,
+    UPLOAD_DATA_FILE_TYPE_INDEX    = 4,
+    UPLOAD_DATA_FRAME_NO_INDEX     = 5,
+    UPLOAD_DATA_DATA_INDEX         = 7,
+    
+    UPLOAD_DATA_DATA_LEN           = 3,
+} UPLOAD_FILE_DATA_E;
+
+typedef enum 
+{
+    UPLOAD_END_BOARD_INDEX        = 0,
+    UPLOAD_END_FUN_CODE_INDEX     = 1,
+    UPLOAD_END_SUB_FUN_CODE_INDEX = 2,
+    UPLOAD_END_DATA_LEN_INDEX     = 3,
+    UPLOAD_END_FILE_TYPE_INDEX    = 4,
+    UPLOAD_END_FILE_CRC_INDEX     = 5,
+    UPLOAD_END_CRC_INDEX          = 7,
+
+    UPLOAD_END_DATA_LEN           = 1,
+    UPLOAD_END_REPLY_DATA_DATA_LEN  = 3,
+    UPLOAD_END_REPLY_DATA_LEN    = 9,
+} UPLOAD_FILE_END_E;
+
+typedef enum // 加载文件操作状态标志 							
+{
+    FILE_IDLE      = 0,					// 空闲状态          
+    LOAD_START     = 1,                 // 加载启动状态      
+    LOAD_DATA      = 2,					// 加载数据接收状态  
+    LOAD_END       = 3, 				// 加载结束状态      
+    LOAD_ACTIVE    = 4, 				// 加载激活状态 
+    LOAD_GO        = 5, 				// 加载复位状态
+} LOAD_FILE_PROCESS_STATE_E;
+
+typedef enum // 文件上传操作状态标志							
+{
+    UPLOAD_START   = 1, 				// 上传启动状态
+    UPLOAD_DATA    = 2, 				// 上传数据状态
+    UPLOAD_END     = 3, 				// 上传结束状态  
+    UPLOAD_CHANGE  = 4, 				// 上传结束，切换状态，用于主获取从电子标签，其他不用  
+} UPLOAD_FILE_PROCESS_STATE_E;
+
+// Modbus 帧缓冲区结构体类型定义
+typedef struct 
+{
+	u8		  m_u8AppCmd;                       // 功能码
+	u8        m_u8AppChildCmd;                  // 子功能码
+	u16		  m_u16AppRdRegStarAddr; 			// 本次读/写的寄存器起始地址
+	u16		  m_u16AppRdRegNums; 				// 本次读/写的寄存器个数
+	MDS_ERROR_TYPE_E  m_eErrorType; 			// 错误类型
+} MODBUS_FRAME_BUF;
+
+// 加载文件结构体类型定义
+typedef struct 
+{
+    u8      m_u8FileType;                       // 加载文件类型
+    u32     m_u32FileSize;                      // 加载文件的大小
+    u8      m_u8FrameSize;                      // 加载文件时的帧大小
+    u16     m_u16CurFrameSeqNum;                // 加载文件时的当前帧序号
+    u16     m_u16MaxFrame;                      // 加载文件时的总帧数
+    u16     m_u16FileCRC;                       // 加载文件的计算CRC           
+    u8      m_u8ProcessState;                   // 加载文件执行状态
+    u32     m_u32FlashWriteStartAddr;           // 加载文件的Flash写入的起始地址
+    u32     m_u32FlashWriteEndAddr;             // 加载文件的Flash写入的终止地址
+    BOOL    m_bActivateAble;                    // 加载文件激活标志
+} LOAD_FILE_ST;
+
+// 上传文件结构体类型定义
+typedef struct 
+{
+    u8      m_u8FileType;                       // 上传文件类型
+    u32     m_u32FileSize;                      // 上传文件的大小
+    u32     m_u32ChangeFileSize;                // 修正后加载文件的大小(原因是写Flash每次不少于4字节)
+    u8      m_u8FrameSize;                      // 上传文件时的帧大小
+    u16     m_u16CurFrameSeqNum;                // 上传文件时的当前帧序号
+    u16     m_u16MaxFrame;                      // 上传文件时的总帧数
+    u16     m_u16FileCRC;                       // 上传文件的计算CRC           
+    u8      m_u8ProcessState;                   // 上传文件执行状态
+    u32     m_u32FlashReadStartAddr;            // 上传文件的Flash读取的起始地址
+    u32     m_u32FlashReadEndAddr;              // 上传文件的Flash读取的终止地址
+} UPLOAD_FILE_ST;
+ 
+/*******************************************************************************
+                			    声明可外部调用的变量
+*******************************************************************************/
+extern MDS_MSG_QUEUE_ST g_stModbusRxQueue;      // 北向Modbus消息接收队列
+extern MDS_MSG_QUEUE_ST g_stModbusTxQueue;      // 北向Modbus消息发送队列
+
+/**
+ * @ingroup     北向Modbus通信
+ * @brief       北向Modbus通信初始化
+ *
+ * @details 
+ * @par 描述： 【应用场景】北向Modbus通信初始化
+ *            
+ * @attention 
+ *             【注意事项】
+ *             【依赖关系说明】无
+ *             【时序说明】无
+ *             【兼容性】无
+ *             【扩展性】无
+ * @param [IN]  无
+ * @param [OUT] 无
+ * @retval	   无
+ * @author  
+ * @date 2017-02-06 16:16
+ */
+extern void NorthModbusCommInit(void);
+
+/**
+ * @ingroup     北向Modbus通信
+ * @brief       北向Modbus消息接收任务
+ *
+ * @details 
+ * @par 描述： 【应用场景】北向Modbus消息接收任务
+ *            
+ * @attention 
+ *             【注意事项】
+ *             【依赖关系说明】无
+ *             【时序说明】无
+ *             【兼容性】无
+ *             【扩展性】无
+ * @param [IN]  无
+ * @param [OUT] 无
+ * @retval	   无
+ * @author  
+ * @date 2017-02-06 16:16
+ */
+extern void NorthModbusMsgRecvTask(void);
+
+/**
+ * @ingroup     北向Modbus通信
+ * @brief       北向Modbus消息发送任务
+ *
+ * @details 
+ * @par 描述： 【应用场景】北向Modbus消息发送任务
+ *            
+ * @attention 
+ *             【注意事项】
+ *             【依赖关系说明】无
+ *             【时序说明】无
+ *             【兼容性】无
+ *             【扩展性】无
+ * @param [IN]  无
+ * @param [OUT] 无
+ * @retval	   无
+ * @author  
+ * @date 2017-02-06 16:16
+ */
+extern void NorthModbusMsgSendTask(void);
+
+#endif
