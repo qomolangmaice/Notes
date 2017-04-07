@@ -1,0 +1,2 @@
+gdbserver调试工具移植到ARM Linux教程
+http://www.veryarm.com/648.html
