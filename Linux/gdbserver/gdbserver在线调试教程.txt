@@ -1,0 +1,70 @@
+
+单板：
+root@am335x:/tmp # tftp -gr gdbserver 192.168.0.101
+root@am335x:/tmp # chmod + gdbserver 
+root@am335x:/tmp # cp gdbserver /mnt/
+root@am335x:/tmp # cp /mnt/gdbserver /usr/bin/
+
+
+root@am335x:/mnt/app_bin0/bin_arm # chmod +x /usr/bin/gdbserver 
+root@am335x:/mnt/app_bin0/bin_arm # chmod +x /mnt/gdbserver 
+root@am335x:/mnt/app_bin0/bin_arm # killall -9 app_arm web_server dhclient keeper
+root@am335x:/mnt/app_bin0/bin_arm # gdbserver 192.168.0.11:55555 app_arm 
+
+
+虚拟机：
+cd /home/wang/IBOX2.1_a8/
+root@wang:/home/wang/IBOX2.1_a8/# cd target/debug
+root@wang:/home/wang/IBOX2.1_a8/target/debug# cd bin_arm/
+root@wang:/home/wang/IBOX2.1_a8/target/debug/bin_arm/# arm-linux-gnueabihf-gdb app_arm
+(gdb) target remote 192.168.0.11:55555
+
+
+二、app运行时调试：
+1单板：
+gdbserver 192.168.0.12:55555 --attach 1063(pid)
+2.虚拟机：
+cd /home/wang/cwx422832_IBOX/IBOX_2.1_A8_182718/target/debug/bin_arm
+(gdb) target remote 192.168.0.12:55555
+(gdb) set solib-search-path ./so/
+
+
+gdb使用：
+r(run) 													- 运行
+i(info) b(break) 										- 查看断点信息
+b(break) func/N											- 当前文件中函数/行号添加断点
+b(break) filename:Fun/N [if 条件] 						- 指定文件指定函数/行号打断点
+watch var [if 条件]										- 添加观察点
+d(delete) num（断点号）									- 删除指定断点
+d(delete)												- 删除所有断点
+clear													- 清除断点
+p(print) var 											- 打印变量值
+p(print) var=x											- 变量赋值
+p(print) &var											- 打印变量地址
+p(print) *address										- 打印地址的数据值
+p(print) /x var											- 十六进制打印
+p(print) *a@N											- 打印数组全部的值
+c(continue)												- 继续运行
+file app_arm											- 载入需要gdb的应用程序
+bt(backtrace)											- 查看栈
+list file:N												- 列出指定文件的代码
+list n1 n2												- 列出指定区域的代码
+finish													- 跳出当前函数
+u(until)												- 跳出当前循环
+n(next)													- 下一步不进入函数
+n(next) N												- 执行N步
+s(step)													- 下一步且进入函数
+j(jump)													- 跳转执行程序到第5行且往下执行（不会停下）
+Enter													- 执行上次的命令
+return												   	- 强制返回当前函数
+call/print												- 强制调用函数
+show language											- 查看当前调试程序的语言
+info frame												- 查看当前函数的程序语言
+info source												- 显示当前的调试源文件
+set language c++										- 手动设置当前的程序语言为C++
+set language 											- 查看可以设置的程序语言
+show can-use-hw-watchpoints								- 查看可设置多少个watch观察点
+set can-use-hw-watchpoints N						    - 设置可设置多少个watch观察点
+kill 													- 结束调试
+whatis var												- 显示变量类型
+ptype var												- 显示结构定义
