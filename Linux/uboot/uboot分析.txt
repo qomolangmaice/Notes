@@ -1,3 +1,5 @@
 【系统移植】uboot详细分析
 http://www.cnblogs.com/lcw/p/3802644.html
 
+Exynos4412 Uboot 移植（二）—— Uboot 启动流程分析
+http://blog.csdn.net/sea1105/article/details/52142644
