@@ -1,0 +1,3 @@
+【系统移植】uboot详细分析
+http://www.cnblogs.com/lcw/p/3802644.html
+
