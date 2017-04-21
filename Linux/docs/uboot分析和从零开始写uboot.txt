@@ -1,0 +1,2 @@
+uboot分析和从零开始写uboot.txt
+http://blog.csdn.net/niaohaoge/article/category/6431783
