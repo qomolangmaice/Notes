@@ -1,0 +1,2 @@
+pyaiml在利用jieba分词的基础上让aiml支持中文
+https://github.com/lemontreeshy/PyAIML
