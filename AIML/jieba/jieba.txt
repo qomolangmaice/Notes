@@ -1,0 +1,5 @@
+结巴分词 C++ 版本
+https://github.com/yanyiwu/cppjieba
+
+CppJieba的C语言api
+https://github.com/yanyiwu/cjieba
