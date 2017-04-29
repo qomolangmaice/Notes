@@ -233,6 +233,9 @@ reboot
 # 注销
 logout
 
+# 更新系统启动菜单 - 包括查找系统已安装的DeepinOS, ubuntu, Win7
+sudo update-grub
+
 # 文件和目录
 
 # 进入 ‘/ home’ 目录
@@ -785,6 +788,12 @@ sed -n ‘1,5p;5q’ example.txt
 
 # 查看第5行
 sed -n ‘5p;5q’ example.txt
+
+# 只显示第5行
+sed -n '5p' exeample.txt
+
+# 显示第5～10行
+sed -n '5,10p' example.txt
 
 # 用单个零替换多个零
 sed -e ‘s/00*/0/g’ example.txt
