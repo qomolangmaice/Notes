@@ -1050,6 +1050,24 @@ netstat -tup
 # show all network services listening on the system and their PID
 netstat -tupl
 
+# netstat命令是一个监控TCP/IP网络的非常有用的工具，它可以显示路由表、实际的网络连接以及每一个网络接口设备的
+# netstat命令的功能是显示网络连接、路由表和网络接口信息，可以让用户得知目前都有哪些网络连接正在运作。
+# 该命令的一般格式为：
+
+# netstat [选项]
+# 命令中各选项的含义如下：
+# -a 显示所有socket，包括正在监听的。
+# -c 每隔1秒就重新显示一遍，直到用户中断它。
+# -i 显示所有网络接口的信息，格式同“ifconfig -e”。
+# -n 以网络IP地址代替名称，显示出网络连接情形。
+# -r 显示核心路由表，格式同“route -e”。
+# -t 显示TCP协议的连接情况。
+# -u 显示UDP协议的连接情况。
+# -v 显示正在进行的工作。
+
+# 仅显示与本机建立TCP连接的外网的IP地址
+netstat -anc | grep ESTABLISHED | grep tcp | grep -v "127.0.0.1"
+
 # show all HTTP traffic
 tcpdump tcp port 80
 
