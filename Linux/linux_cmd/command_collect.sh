@@ -49,6 +49,26 @@ apt-cache search dmidecode
 # 查找本机所有硬件各项信息
 sudo dmidecode
 
+# APT管理工具常用命令
+apt-cache 加上不同的子命令和参数的使用可以实现查找,显示软件,包信息及包信赖关系等功能.
+apt-cache stats 显示当前系统所有使用的Debain数据源的统计信息.
+apt-cache search +"包名",可以查找相关的软件包.
+apt-cache show   +"包名",可以显示指定软件包的详细信息.
+apt-cache depends +"包名",可以查找软件包的依赖关系.
+apt-get upgrade   更新系统中所有的包到最新版
+apt-get install   安装软件包
+apt-get --reindtall install 重新安装软件包
+apt-get remove 卸载软件包
+apt-get --purge remove 完全卸载软件包
+apt-get clean 清除无用的软件包
+在用命令apt-get install之前,是先将软件包下载到/var/cache/apt/archives中,之后再进行安装的.
+所以我们可以用apt-get clean清除/var/cache/apt/archives目录中的软件包.
+
+源码包安装
+   apt-cache showsrc 查找看源码包的文件信息(在下载之前)
+   apt-get source 下载源码包.
+   apt-get build-dep +"包名" 构建源码包的编译环境.
+
 # 生成wifi热点二维码
 qrencode -s 7 -o qr-wifi.png “WIFI:S:$(zenity –entry –text=”Network name (SSID)” –title=”Create WiFi QR”);T:WPA;P:$(zenity –password –title=”Wifi Password”);;”
 
