@@ -49,6 +49,9 @@ apt-cache search dmidecode
 # 查找本机所有硬件各项信息
 sudo dmidecode
 
+# linux更新开机启动项
+sudo update-grub
+
 # APT管理工具常用命令
 apt-cache 加上不同的子命令和参数的使用可以实现查找,显示软件,包信息及包信赖关系等功能.
 apt-cache stats 显示当前系统所有使用的Debain数据源的统计信息.
