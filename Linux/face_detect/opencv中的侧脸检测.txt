@@ -1,2 +1,0 @@
-opencv中的侧脸检测
-http://blog.csdn.net/zdyueguanyun/article/details/51833125
