@@ -7,6 +7,9 @@
 #########################################################################
 #!/bin/bash
 
+echo "git-ssh 配置和使用"
+google-chrome https://segmentfault.com/a/1190000002645623
+
 sudo apt-get install git
 git config --global user.name "qomolangmaice"
 git config --global user.email "qomolangmaice@163.com"
