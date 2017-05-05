@@ -1,3 +1,0 @@
-
-Facial Landmark Detection
-http://www.cnblogs.com/lanye/p/5310090.html
