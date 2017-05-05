@@ -5,4 +5,5 @@ http://blog.csdn.net/sunmc1204953974/article/details/49976045
 Python 40行代码实现人脸识别功能
 http://m.jb51.net/article/110252.htm
 
-
+开源|手把手教你用Python进行人脸识别（附源代码）
+http://m.sohu.com/n/483824682/
