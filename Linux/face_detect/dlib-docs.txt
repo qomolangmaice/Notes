@@ -1,3 +1,8 @@
 
 python基于dlib的face landmarks
 http://blog.csdn.net/sunmc1204953974/article/details/49976045
+
+Python 40行代码实现人脸识别功能
+http://m.jb51.net/article/110252.htm
+
+
