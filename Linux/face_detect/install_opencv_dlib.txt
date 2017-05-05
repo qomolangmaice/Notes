@@ -1,0 +1,32 @@
+
+下载opencv https://github.com/Itseez/opencv/archive/2.4.11.zip 或 http://www.pandaroll.cn/openface/ocv.zip
+cd ~
+unzip ocv.zip
+cd opencv-2.4.11
+mkdir release
+cd release
+cmake -G "Unix Makefiles" -D CMAKE_CXX_COMPILER=/usr/bin/g++ CMAKE_C_COMPILER=/usr/bin/gcc -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local -D WITH_TBB=ON -D BUILD_NEW_PYTHON_SUPPORT=ON -D WITH_V4L=ON -D INSTALL_C_EXAMPLES=ON -D INSTALL_PYTHON_EXAMPLES=ON -D BUILD_EXAMPLES=ON -D WITH_QT=ON -D WITH_OPENGL=ON -D BUILD_FAT_JAVA_LIB=ON -D INSTALL_TO_MANGLED_PATHS=ON -D INSTALL_CREATE_DISTRIB=ON -D INSTALL_TESTS=ON -D ENABLE_FAST_MATH=ON -D WITH_IMAGEIO=ON -D BUILD_SHARED_LIBS=OFF -D WITH_GSTREAMER=ON ..
+sudo make all -j4 #cpu是4核
+sudo make install #若报错硬件问题或操作系统问题，可能是过热问题，换个主板或计算机，最好是台式机。
+
+#安装无报错后将cv2.so 考到python目录下
+cp /lib/cv2.so /usr/local/lib/python2.7/dist-packages
+
+#安装dlib
+下载dlib https://github.com/davisking/dlib/releases/download/v18.16/dlib-18.16.tar.bz2
+若难以下载,也可以 www.pandaroll.cn/opencv/dlib-18.16.tar.bz2
+
+cp dlib-18.16.tar.bz2 ~/src
+cd src
+tar xf dlib-18.16.tar.bz2
+cd dlib-18.16/python_examples
+mkdir build
+cd build
+cmake ../../tools/python
+cmake --build . --config Release
+sudo cp dlib.so /usr/local/lib/python2.7/dist-packages
+
+#到目前，opencv 和 dlib应该安装好了，测试一下安装成功否：
+python
+import cv2
+import dlib
