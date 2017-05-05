@@ -1,2 +1,0 @@
-Qt中使用OpenCV库.txt
-http://www.cnblogs.com/lanye/p/3487740.html
