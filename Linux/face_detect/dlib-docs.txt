@@ -7,3 +7,6 @@ http://m.jb51.net/article/110252.htm
 
 开源|手把手教你用Python进行人脸识别（附源代码）
 http://m.sohu.com/n/483824682/
+
+Dlib+opencv实时提取人脸轮廓（windows环境下//Dlib配置入门）
+http://blog.csdn.net/zmdsjtu/article/details/52422847
