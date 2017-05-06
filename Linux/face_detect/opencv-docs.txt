@@ -4,6 +4,9 @@ http://blog.csdn.net/zmdsjtu/article/details/69507456
 人脸检测及识别python实现系列（6）——终篇：从实时视频流识别出“我”
 http://www.cnblogs.com/neo-T/category/951647.html
 
+训练一个神经网络 能让她认得我
+http://www.cnblogs.com/mu---mu/p/FaceRecognition-tensorflow.html
+
 Facial Landmark Detection
 http://www.cnblogs.com/lanye/p/5310090.html
 
