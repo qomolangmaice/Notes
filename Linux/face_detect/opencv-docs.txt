@@ -18,3 +18,9 @@ http://blog.csdn.net/zdyueguanyun/article/details/51833125
 
 opencv︱图片与视频的读入、显示、写出、放缩与基本绘图函数介绍
 http://blog.csdn.net/sinat_26917383/article/details/69817532
+
+OpenCV学习笔记2:使用opencv进行图像比较
+http://blog.csdn.net/nicebooks/article/details/8166340
+
+openface survey心得
+http://luvjennifer-tw-blog.logdown.com/posts/2016/10/17/openface-survey-experience
