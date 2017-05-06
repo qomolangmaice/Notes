@@ -1,3 +1,6 @@
+Ubuntu/Linux编译Opencv3.2（包括使用）
+http://blog.csdn.net/zmdsjtu/article/details/69507456
+
 人脸检测及识别python实现系列（6）——终篇：从实时视频流识别出“我”
 http://www.cnblogs.com/neo-T/category/951647.html
 
