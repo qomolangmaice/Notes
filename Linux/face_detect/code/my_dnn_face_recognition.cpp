@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
     if (argc != 2)
     {
         cout << "Run this example by invoking it like this: " << endl;
-        cout << "   ./dnn_face_recognition_ex faces/bald_guys.jpg" << endl;
+        cout << "   ./dnn_face_recognition_ex your_img.jpg" << endl;
         cout << endl;
         cout << "You will also need to get the face landmarking model file as well as " << endl;
         cout << "the face recognition model file.  Download and then decompress these files from: " << endl;
@@ -108,13 +108,16 @@ int main(int argc, char *argv[])
     anet_type net;
     deserialize("../data/dlib_face_recognition_resnet_model_v1.dat") >> net;
 
+    // 在屏幕上显示原始的图片
     matrix<rgb_pixel> img;
     load_image(img, argv[1]);
+    //image_window win(img); 
 
-    // 在屏幕上显示原始的图片
-    image_window win(img); 
+    //image_window show_win;
 
-    image_window show_win;
+    // 在屏幕上显示匹配好的的图片
+    matrix<rgb_pixel> macthed_img;
+    image_window show_macthed_win;
 
     try
     {
@@ -126,6 +129,7 @@ int main(int argc, char *argv[])
         }
 
         unsigned int count = 5;
+        unsigned int isCatchedFlag = 0;
 
         // Grab and process frames until the main window is closed by the user.
         //while(!win.is_closed())
@@ -176,10 +180,8 @@ int main(int argc, char *argv[])
             imshow("Dlib特征点", temp);
             //-----------------------------------------------------------------------------------------
 
-            if (count > 0)
+            if (!isCatchedFlag)
             {
-                count--;
-
                 // 在从视频流中抓取的一帧图像上运行人脸检测器，每个人脸提取一个副本，其中这个副本已被归一化到150x150像素大小, 并且具备适当的旋转中心。
                 std::vector<matrix<rgb_pixel>> faces;
 
@@ -206,7 +208,7 @@ int main(int argc, char *argv[])
                     // Also put some boxes on the faces so we can see that the detector is finding
                     // them.
                     // 还有我们给这些人脸画了一个矩形框，这样我们就可以看到探测器在找他们
-                    win.add_overlay(face);
+                    //win.add_overlay(face);
                 }
 
                 if (faces.size() == 0)
@@ -240,8 +242,13 @@ int main(int argc, char *argv[])
                 // 这个将正确地指明这张图片中有多少个人
                 cout << "number of people found in the image: "<< num_clusters << endl;
 
+                if (num_clusters > 0)   // 至少识别到了一张人脸
+                {
+                    isCatchedFlag = 1;
+                }
+
                 // 现在我们将这些面孔聚类结果显示到屏幕上. 你将会看到它会正确地将所有属于同一个人的面孔图像组织到一起.
-                std::vector<image_window> win_clusters(num_clusters);
+                //std::vector<image_window> win_clusters(num_clusters);
                 for (size_t cluster_id = 0; cluster_id < num_clusters; ++cluster_id)
                 {
                     std::vector<matrix<rgb_pixel>> temp;
@@ -250,8 +257,13 @@ int main(int argc, char *argv[])
                         if (cluster_id == labels[j])
                             temp.push_back(faces[j]);
                     }
-                    win_clusters[cluster_id].set_title("face cluster " + cast_to_string(cluster_id));
-                    win_clusters[cluster_id].set_image(tile_images(temp));
+                    //win_clusters[cluster_id].set_title("face cluster " + cast_to_string(cluster_id));
+                    //win_clusters[cluster_id].set_image(tile_images(temp));
+                    
+                    save_bmp(tile_images(temp), "kevin_macthed.bmp");
+                    load_image(macthed_img, "kevin_macthed.bmp");
+                    show_macthed_win.set_title("kevin_macthed");
+                    show_macthed_win.set_image(macthed_img);
                 }
 
                 // 最后，我们来将所有的面孔图像描述子打印到屏幕上
@@ -265,11 +277,9 @@ int main(int argc, char *argv[])
                 // 如果你没有在运用模型中使用抖动， 比如我们在区分光头佬的时候
                 // 它只能在LFW benchmark中得到99.13%的识别精度. 所以抖动可以使整个识别过程更加精确，
                 // 但是同时在进行计算人脸描述子时会更慢一些.
-                cout << "hit enter to terminate" << endl;
-                cin.get();
+                //cout << "hit enter to terminate" << endl;
+                //cin.get();
             }
-            else
-                count = 0;
         }
     }
     catch(serialization_error& e)
