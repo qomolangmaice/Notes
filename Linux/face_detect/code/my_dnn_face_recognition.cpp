@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
                             macthed_name = argv[1];
                             macthed_name = "Matched: " + macthed_name;
                         }
-                        cv::Point pt(10,10);
+                        cv::Point pt(20,50);
                         cv::putText(frame, macthed_name, pt, CV_FONT_HERSHEY_DUPLEX, 1, cv::Scalar(246, 246, 94));
 
                         //每个特征点的编号
@@ -257,6 +257,7 @@ int main(int argc, char *argv[])
                     //win_clusters[cluster_id].set_image(tile_images(cluster_temp));
                     
                     string save_img_name = argv[1];
+                    save_img_name = save_img_name + "-macthed";
                     save_bmp(tile_images(cluster_temp), save_img_name);
                     load_image(macthed_img, save_img_name);
                     show_macthed_win.set_title(save_img_name);
