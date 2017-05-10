@@ -1,0 +1,2 @@
+FFmpeg总结（十二）用ffmpeg与nginx实现直播多路流并发播放
+http://blog.csdn.net/hejjunlin/article/details/71331929
