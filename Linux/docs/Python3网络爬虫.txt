@@ -1,0 +1,3 @@
+Python3网络爬虫(七)：使用Beautiful Soup爬取小说
+http://blog.csdn.net/c406495762/article/details/71158264
+
