@@ -113,11 +113,13 @@ int main(int argc, char *argv[])
     load_image(img, argv[1]);
     //image_window win(img); 
 
-    //image_window show_win;
+    image_window show_win;
 
     // 在屏幕上显示匹配好的的图片
     matrix<rgb_pixel> macthed_img;
     image_window show_macthed_win;
+
+    string macthed_name = "";
 
     try
     {
@@ -132,21 +134,19 @@ int main(int argc, char *argv[])
         unsigned int isCatchedFlag = 0;
 
         // Grab and process frames until the main window is closed by the user.
-        //while(!win.is_closed())
-        while(cv::waitKey(30) != 27)    // Press 'Esc' to quit the program
-        //int i = 0;
-        //for (i = 0; i < 3; i++)
+        while(!show_win.is_closed())
+        //while(cv::waitKey(30) != 27)    // Press 'Esc' to quit the program
         {
             // Grab a frame
-            cv::Mat temp;
-            cap >> temp;
+            cv::Mat frame;
+            cap >> frame;
             // Turn OpenCV's Mat into something dlib can deal with.  Note that this just
             // wraps the Mat object, it doesn't copy anything.  So cimg is only valid as
-            // long as temp is valid.  Also don't do anything to temp that would cause it
+            // long as temp(frame) is valid.  Also don't do anything to temp(frame) that would cause it
             // to reallocate the memory which stores the image as that will make cimg
-            // contain dangling pointers.  This basically means you shouldn't modify temp
+            // contain dangling pointers.  This basically means you shouldn't modify temp(frame) 
             // while using cimg.
-            cv_image<bgr_pixel> cimg(temp);
+            cv_image<bgr_pixel> cimg(frame);
 
             // Detect show_faces 
             std::vector<rectangle> show_faces = detector(cimg);
@@ -155,29 +155,30 @@ int main(int argc, char *argv[])
             for (unsigned long i = 0; i < show_faces.size(); ++i)
             {
                 shapes.push_back(sp(cimg, show_faces[i]));
-                //show_win.clear_overlay();
-                //show_win.set_image(cimg);
-                //show_win.add_overlay(show_faces[i]);
-            }
 
-            // Display it all on the screen - landmarks
-            //show_win.clear_overlay();
-            //show_win.set_image(cimg);
-            //show_win.add_overlay(render_face_detections(shapes));
+                if (!shapes.empty()) {  
+                    for (int i = 0; i < 68; i++) {  
+                        // 所有的需要的特征点都存储在Shapes里
+                        circle(frame, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), 1, cv::Scalar(246, 246, 94), -1); 
+                        
+                        if (isCatchedFlag)
+                        {
+                            macthed_name = argv[1];
+                            macthed_name = "Matched: " + macthed_name;
+                        }
+                        cv::Point pt(10,10);
+                        cv::putText(frame, macthed_name, pt, CV_FONT_HERSHEY_DUPLEX, 1, cv::Scalar(246, 246, 94));
 
-            // Add by kevin 2017.5.6
-            if (!shapes.empty()) {  
-                for (int i = 0; i < 68; i++) {  
-                    // 所有的需要的特征点都存储在Shapes里
-                    circle(temp, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), 1, cv::Scalar(246, 246, 94), -1); 
-
-                    //每个特征点的编号
-                    //putText(temp, to_string(i), cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), CV_FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 0, 0),1,4);
-                    //  shapes[0].part(i).x();//68个  
+                        //每个特征点的编号
+                        //putText(frame, to_string(i), cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), CV_FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 0, 0),1,4);
+                        //  shapes[0].part(i).x();//68个  
+                    }  
                 }  
-            }  
-            ///Display it all on the screen - keypoints
-            imshow("Dlib特征点", temp);
+                show_win.clear_overlay();
+                show_win.set_title("Real-Time Camera Face Recognition");
+                show_win.set_image(cimg);
+                show_win.add_overlay(show_faces[i]);
+            }
             //-----------------------------------------------------------------------------------------
 
             if (!isCatchedFlag)
@@ -191,11 +192,6 @@ int main(int argc, char *argv[])
                     matrix<rgb_pixel> face_chip;
                     extract_image_chip(cimg, get_face_chip_details(shape,150,0.25), face_chip);
                     faces.push_back(move(face_chip));
-
-                    // Also put some boxes on the faces so we can see that the detector is finding
-                    // them.
-                    // 还有我们给这些人脸画了一个矩形框，这样我们就可以看到探测器在找他们
-                    //win.add_overlay(face);
                 }
 
                 for (auto face : detector(img))
@@ -251,18 +247,19 @@ int main(int argc, char *argv[])
                 //std::vector<image_window> win_clusters(num_clusters);
                 for (size_t cluster_id = 0; cluster_id < num_clusters; ++cluster_id)
                 {
-                    std::vector<matrix<rgb_pixel>> temp;
+                    std::vector<matrix<rgb_pixel>> cluster_temp;
                     for (size_t j = 0; j < labels.size(); ++j)
                     {
                         if (cluster_id == labels[j])
-                            temp.push_back(faces[j]);
+                            cluster_temp.push_back(faces[j]);
                     }
                     //win_clusters[cluster_id].set_title("face cluster " + cast_to_string(cluster_id));
-                    //win_clusters[cluster_id].set_image(tile_images(temp));
+                    //win_clusters[cluster_id].set_image(tile_images(cluster_temp));
                     
-                    save_bmp(tile_images(temp), "kevin_macthed.bmp");
-                    load_image(macthed_img, "kevin_macthed.bmp");
-                    show_macthed_win.set_title("kevin_macthed");
+                    string save_img_name = argv[1];
+                    save_bmp(tile_images(cluster_temp), save_img_name);
+                    load_image(macthed_img, save_img_name);
+                    show_macthed_win.set_title(save_img_name);
                     show_macthed_win.set_image(macthed_img);
                 }
 
