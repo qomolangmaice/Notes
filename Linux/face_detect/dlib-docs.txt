@@ -10,3 +10,12 @@ http://m.sohu.com/n/483824682/
 
 Dlib+opencv实时提取人脸轮廓（windows环境下//Dlib配置入门）
 http://blog.csdn.net/zmdsjtu/article/details/52422847
+
+【dlib代码解读】人脸检测器的训练
+http://blog.csdn.net/elaine_bao/article/details/53046542
+
+【dlib代码解读】人脸关键点检测器的训练
+http://blog.csdn.net/elaine_bao/article/details/53054533?locationNum=7&fps=1
+
+ Opencv与dlib联合进行人脸关键点检测与识别
+ http://blog.csdn.net/Mr_Curry/article/details/51994497?locationNum=9&fps=1
