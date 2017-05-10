@@ -13,6 +13,9 @@ http://www.cnblogs.com/lanye/p/5310090.html
 Qt中使用OpenCV库.txt
 http://www.cnblogs.com/lanye/p/3487740.html
 
+OpenCV实践之路——人脸识别之三识别自己的脸
+http://blog.csdn.net/xingchenbingbuyu/article/details/51472330
+
 opencv中的侧脸检测
 http://blog.csdn.net/zdyueguanyun/article/details/51833125
 
