@@ -2,6 +2,14 @@
 ＃vi /etc/apt/soure.list
 加入以下内容：
 
+#阿里云源
+deb http://mirrors.aliyun.com/debian wheezy main contrib non-free
+deb-src http://mirrors.aliyun.com/debian wheezy main contrib non-free
+deb http://mirrors.aliyun.com/debian wheezy-updates main contrib non-free
+deb-src http://mirrors.aliyun.com/debian wheezy-updates main contrib non-free
+deb http://mirrors.aliyun.com/debian-security wheezy/updates main contrib non-free
+deb-src http://mirrors.aliyun.com/debian-security wheezy/updates main contrib non-free
+
 ##中科大源
 deb http://mirrors.ustc.edu.cn/debian jessie main contrib non-free
 deb-src http://mirrors.ustc.edu.cn/debian jessie main contrib non-free
