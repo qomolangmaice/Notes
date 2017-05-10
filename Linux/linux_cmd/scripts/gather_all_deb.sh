@@ -68,18 +68,20 @@ tree ../all_deb/
 for cmd in `cat cmd_list.txt`
 do
 	echo -e "\033[31m[*] Confirm ${cmd} has been installed or not.\033[0m"
-	echo -e "\033[31m[*] Before ${cmd} deleted ...\033[0m"
+	echo -e "\033[31m[*] Before ${cmd} purge deleted ...\033[0m"
 	${cmd} --version
-	apt-get -f remove ${cmd}
-	echo -e "\033[31m[*] After ${cmd} deleted ...\033[0m"
+	apt-get --purge remove ${cmd}
+	apt-get autoremove
+	echo -e "\033[31m[*] After ${cmd} purge deleted ...\033[0m"
 	${cmd} --version
 	pwd
 	cd "${cmd}_depends"
-	dpkg --force-all -i *.deb
+	dpkg -i *.deb
 	cd .. 
 	echo -e "\033[31m[*] After ${cmd} installed ...\033[0m"
 	${cmd} --version
 done
+
 
 for cmd in `cat cmd_list.txt`
 do
