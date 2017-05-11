@@ -29,7 +29,6 @@
 
 #include <dlib/opencv.h>
 #include <opencv2/opencv.hpp>
-//#include <opencv2/highgui/highgui.hpp>
 #include <dlib/image_processing/frontal_face_detector.h>
 #include <dlib/image_processing/render_face_detections.h>
 #include <dlib/image_processing.h>
@@ -71,21 +70,12 @@ using anet_type = loss_metric<fc_no_bias<128,avg_pool_everything<
                             input_rgb_image_sized<150>
                             >>>>>>>>>>>>;
 
-// ----------------------------------------------------------------------------------------
-
-std::vector<matrix<rgb_pixel>> jitter_image(
-    const matrix<rgb_pixel>& img
-);
-
-// ----------------------------------------------------------------------------------------
-
-
 int main(int argc, char *argv[])
 {
     if (argc != 2)
     {
         cout << "Run this example by invoking it like this: " << endl;
-        cout << "   ./dnn_face_recognition_ex your_img.jpg" << endl;
+        cout << "   ./dnn_face_recognition_ex your_face_img" << endl;
         cout << endl;
         cout << "You will also need to get the face landmarking model file as well as " << endl;
         cout << "the face recognition model file.  Download and then decompress these files from: " << endl;
@@ -95,8 +85,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // The first thing we are going to do is load all our models.  First, since we need to
-    // find faces in the image we will need a face detector:
     // 定义一个人脸检测器，用来查找图片中的人脸
     frontal_face_detector detector = get_frontal_face_detector();
 
@@ -130,27 +118,26 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        unsigned int count = 5;
         unsigned int isCatchedFlag = 0;
 
-        // Grab and process frames until the main window is closed by the user.
+        // 抓取并处理视频帧图像，直到用户关闭当前显示视频窗口
         while(!show_win.is_closed())
         //while(cv::waitKey(30) != 27)    // Press 'Esc' to quit the program
         {
-            // Grab a frame
+            // 抓取一帧图像
             cv::Mat frame;
             cap >> frame;
-            // Turn OpenCV's Mat into something dlib can deal with.  Note that this just
-            // wraps the Mat object, it doesn't copy anything.  So cimg is only valid as
-            // long as temp(frame) is valid.  Also don't do anything to temp(frame) that would cause it
-            // to reallocate the memory which stores the image as that will make cimg
-            // contain dangling pointers.  This basically means you shouldn't modify temp(frame) 
-            // while using cimg.
+
+            // 将Opencv‘s Mat对象转换成dlib可以处理的东西. 需要注意的是，
+            // 这仅仅是包装了一下Mat对象, 并没有拷贝什么. 所以当frame变量有效的情况下，cimg才是有效的.
+            // 所以不要对frame变量做什么，否则可能会内存重定向，这样会导致储存图像的内存包含空指针.
+            // 基本上也就意味着，当你在使用cimg变量的时候，不应该去修改frame变量
             cv_image<bgr_pixel> cimg(frame);
 
-            // Detect show_faces 
+            // 检测cimg中包含的人脸
             std::vector<rectangle> show_faces = detector(cimg);
-            // Find the pose of each face.
+            
+            // 找到每张人脸的正面姿势
             std::vector<full_object_detection> shapes;
             for (unsigned long i = 0; i < show_faces.size(); ++i)
             {
@@ -175,8 +162,9 @@ int main(int argc, char *argv[])
                     }  
                 }  
                 show_win.clear_overlay();
-                show_win.set_title("Real-Time Camera Face Recognition");
+                show_win.set_title("Face Recognition");
                 show_win.set_image(cimg);
+                // 还有我们给这些人脸画了一个矩形框，这样我们就可以看到探测器在找他们
                 show_win.add_overlay(show_faces[i]);
             }
             //-----------------------------------------------------------------------------------------
@@ -200,11 +188,6 @@ int main(int argc, char *argv[])
                     matrix<rgb_pixel> face_chip;
                     extract_image_chip(img, get_face_chip_details(shape,150,0.25), face_chip);
                     faces.push_back(move(face_chip));
-
-                    // Also put some boxes on the faces so we can see that the detector is finding
-                    // them.
-                    // 还有我们给这些人脸画了一个矩形框，这样我们就可以看到探测器在找他们
-                    //win.add_overlay(face);
                 }
 
                 if (faces.size() == 0)
@@ -218,6 +201,8 @@ int main(int argc, char *argv[])
                 // 所以我们使用这些向量来识别这些图像的部分图像是来自同一个人，还是来自不同的人
                 std::vector<matrix<float,0,1>> face_descriptors = net(faces);
 
+                printf("face_descriptors size = %d\n", face_descriptors.size());
+
                 // 值得注意的是，我们可以做的一件简单的事情是做人脸聚类。
                 // 下一步的代码创建一个图的连接面，然后使用中国耳语图聚类算法，以确定有多少人以及有哪些面孔属于谁
                 std::vector<sample_pair> edges;
@@ -229,54 +214,48 @@ int main(int argc, char *argv[])
                         // 然后我们检查这些面孔的描述子之间的距离是否小于0.6, 0.6是我们训练深度神经网络的确定阀值
                         // 当然你可以使用其他任意你觉得有用的阀值
                         if (length(face_descriptors[i] - face_descriptors[j]) < 0.6)
+                        {
                             edges.push_back(sample_pair(i,j));
+                        }
                     }
                 }
+
                 std::vector<unsigned long> labels;
                 const auto num_clusters = chinese_whispers(edges, labels);
 
                 // 这个将正确地指明这张图片中有多少个人
                 cout << "number of people found in the image: "<< num_clusters << endl;
 
-                if (num_clusters > 0)   // 至少识别到了一张人脸
-                {
-                    isCatchedFlag = 1;
-                }
+                printf("num_clusters = %d, labels size = %d\n", num_clusters, labels.size());
 
-                // 现在我们将这些面孔聚类结果显示到屏幕上. 你将会看到它会正确地将所有属于同一个人的面孔图像组织到一起.
-                //std::vector<image_window> win_clusters(num_clusters);
-                for (size_t cluster_id = 0; cluster_id < num_clusters; ++cluster_id)
+                if (num_clusters != 0)
                 {
-                    std::vector<matrix<rgb_pixel>> cluster_temp;
-                    for (size_t j = 0; j < labels.size(); ++j)
+                    isCatchedFlag = 1;  // 至少识别到了一张人脸
+                    // 现在我们将这些面孔聚类结果显示到屏幕上. 你将会看到它会正确地将所有属于同一个人的面孔图像组织到一起.
+                    //std::vector<image_window> win_clusters(num_clusters);
+                    for (size_t cluster_id = 0; cluster_id < num_clusters; ++cluster_id)
                     {
-                        if (cluster_id == labels[j])
-                            cluster_temp.push_back(faces[j]);
+                        std::vector<matrix<rgb_pixel>> cluster_temp;
+                        for (size_t j = 0; j < labels.size(); ++j)
+                        {
+                            if (cluster_id == labels[j])
+                                cluster_temp.push_back(faces[j]);
+                        }
+                        //win_clusters[cluster_id].set_title("face cluster " + cast_to_string(cluster_id));
+                        //win_clusters[cluster_id].set_image(tile_images(cluster_temp));
+                        
+                        string save_img_name = argv[1];
+                        save_img_name = save_img_name + "-macthed.bmp";
+                        save_bmp(tile_images(cluster_temp), save_img_name);
+                        load_image(macthed_img, save_img_name);
+                        show_macthed_win.set_title(save_img_name);
+                        show_macthed_win.set_image(macthed_img);
                     }
-                    //win_clusters[cluster_id].set_title("face cluster " + cast_to_string(cluster_id));
-                    //win_clusters[cluster_id].set_image(tile_images(cluster_temp));
-                    
-                    string save_img_name = argv[1];
-                    save_img_name = save_img_name + "-macthed";
-                    save_bmp(tile_images(cluster_temp), save_img_name);
-                    load_image(macthed_img, save_img_name);
-                    show_macthed_win.set_title(save_img_name);
-                    show_macthed_win.set_image(macthed_img);
                 }
-
-                // 最后，我们来将所有的面孔图像描述子打印到屏幕上
-                //cout << "face descriptor for one face: " << trans(face_descriptors[0]) << endl;
-
-                // 当然这里需要注意的是，在创建人脸描述子时是否用到抖动, 是可以用来提高人脸识别精度.
-                // 特别是，你需要使用jitter_image()常规计算描述符子, 才能在LFW benchmark中得到99.38%识别精度
-                //matrix<float,0,1> face_descriptor = mean(mat(net(jitter_image(faces[0]))));
-                //cout << "jittered face descriptor for one face: " << trans(face_descriptor) << endl;
-
-                // 如果你没有在运用模型中使用抖动， 比如我们在区分光头佬的时候
-                // 它只能在LFW benchmark中得到99.13%的识别精度. 所以抖动可以使整个识别过程更加精确，
-                // 但是同时在进行计算人脸描述子时会更慢一些.
-                //cout << "hit enter to terminate" << endl;
-                //cin.get();
+                else
+                {
+                    printf("Does not recognize anyone :(\n");
+                }
             }
         }
     }
