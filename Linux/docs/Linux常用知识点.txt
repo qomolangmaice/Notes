@@ -6,3 +6,6 @@ https://wenku.baidu.com/view/8e5c7be2e009581b6bd9eb26.html?from=search
 
 如何在Linux实现自动运行程序
 http://www.cnblogs.com/geaozhang/p/6828971.html
+
+rsync 实现本地时时文件同步
+http://www.cnblogs.com/xushiqi/p/6732595.html
