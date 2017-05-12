@@ -39,6 +39,13 @@
 #include <dlib/dnn.h>
 #include <dlib/image_io.h>
 
+#include <stdio.h>
+#include <time.h>
+
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+
 using namespace dlib;
 using namespace std;
 
@@ -70,6 +77,8 @@ using anet_type = loss_metric<fc_no_bias<128,avg_pool_everything<
                             input_rgb_image_sized<150>
                             >>>>>>>>>>>>;
 
+void *face_rec_thread_func(void *ptr);
+
 int main(int argc, char *argv[])
 {
     if (argc != 2)
@@ -84,6 +93,9 @@ int main(int argc, char *argv[])
         cout << endl;
         return 1;
     }
+
+    pthread_t face_rec_thread_id;
+    int ret = 0;
 
     // 定义一个人脸检测器，用来查找图片中的人脸
     frontal_face_detector detector = get_frontal_face_detector();
@@ -108,6 +120,12 @@ int main(int argc, char *argv[])
     image_window show_macthed_win;
 
     string macthed_name = "";
+
+    clock_t _detect_face_start, _detect_face_end;
+    clock_t _DNN_net_start, _DNN_net_end;
+    clock_t _separate_face_start, _separate_face_end;
+    clock_t _cluster_start, _cluster_end;
+    clock_t _chinese_whispers_start, _chinese_whispers_end;
 
     try
     {
@@ -136,17 +154,19 @@ int main(int argc, char *argv[])
 
             // 检测cimg中包含的人脸
             std::vector<rectangle> show_faces = detector(cimg);
-            
+
             // 找到每张人脸的正面姿势
             std::vector<full_object_detection> shapes;
             for (unsigned long i = 0; i < show_faces.size(); ++i)
             {
                 shapes.push_back(sp(cimg, show_faces[i]));
 
-                if (!shapes.empty()) {  
-                    for (int i = 0; i < 68; i++) {  
+                if (!shapes.empty()) 
+                {  
+                    for (int j = 0; j < 68; j++) 
+                    {  
                         // 所有的需要的特征点都存储在Shapes里
-                        circle(frame, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), 1, cv::Scalar(246, 246, 94), -1); 
+                        circle(frame, cvPoint(shapes[0].part(j).x(), shapes[0].part(j).y()), 1, cv::Scalar(246, 246, 94), -1); 
                         
                         if (isCatchedFlag)
                         {
@@ -157,20 +177,25 @@ int main(int argc, char *argv[])
                         cv::putText(frame, macthed_name, pt, CV_FONT_HERSHEY_DUPLEX, 1, cv::Scalar(246, 246, 94));
 
                         //每个特征点的编号
-                        //putText(frame, to_string(i), cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), CV_FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 0, 0),1,4);
-                        //  shapes[0].part(i).x();//68个  
-                    }  
-                }  
+                        //putText(frame, to_string(j), cvPoint(shapes[0].part(j).x(), shapes[0].part(j).y()), CV_FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 0, 0),1,4);
+                        //  shapes[0].part(j).x();//68个  
+                    } 
+                }
+
                 show_win.clear_overlay();
                 show_win.set_title("Face Recognition");
                 show_win.set_image(cimg);
                 // 还有我们给这些人脸画了一个矩形框，这样我们就可以看到探测器在找他们
-                show_win.add_overlay(show_faces[i]);
+                show_win.add_overlay(show_faces[i]);    
             }
+
+            pthread_create(&face_rec_thread_id, NULL, face_rec_thread_func, NULL);
+            
             //-----------------------------------------------------------------------------------------
 
-            if (!isCatchedFlag)
+            if (!isCatchedFlag && !shapes.empty())
             {
+                _detect_face_start = clock();           /*记录起始时间*/
                 // 在从视频流中抓取的一帧图像上运行人脸检测器，每个人脸提取一个副本，其中这个副本已被归一化到150x150像素大小, 并且具备适当的旋转中心。
                 std::vector<matrix<rgb_pixel>> faces;
 
@@ -196,6 +221,14 @@ int main(int argc, char *argv[])
                     return 1;
                 }
 
+                _detect_face_end = clock();           /*记录结束时间*/
+                {
+                    double seconds  =(double)(_detect_face_end - _detect_face_start)/CLOCKS_PER_SEC;
+                    fprintf(stderr, "Detect faces use time is: %.8f\n", seconds);
+                }
+
+                _DNN_net_start = clock();
+
                 // 这个会调用深度神经网络来将人脸中的人脸图片转换成一个128D的向量
                 // 在这个向量空间中，来自同一个人的图像彼此是相似的，但是来自不同的人的向量却是相距甚远.
                 // 所以我们使用这些向量来识别这些图像的部分图像是来自同一个人，还是来自不同的人
@@ -203,6 +236,13 @@ int main(int argc, char *argv[])
 
                 printf("face_descriptors size = %d\n", face_descriptors.size());
 
+                _DNN_net_end = clock();
+                {
+                    double seconds  =(double)(_DNN_net_end - _DNN_net_start)/CLOCKS_PER_SEC;
+                    fprintf(stderr, "DNN net use time is: %.8f\n", seconds);
+                }
+
+                _separate_face_start = clock();
                 // 值得注意的是，我们可以做的一件简单的事情是做人脸聚类。
                 // 下一步的代码创建一个图的连接面，然后使用中国耳语图聚类算法，以确定有多少人以及有哪些面孔属于谁
                 std::vector<sample_pair> edges;
@@ -219,7 +259,13 @@ int main(int argc, char *argv[])
                         }
                     }
                 }
+                _separate_face_end = clock();
+                {
+                    double seconds  =(double)(_separate_face_end - _separate_face_start)/CLOCKS_PER_SEC;
+                    fprintf(stderr, "Separate face use time is: %.8f\n", seconds);
+                }
 
+                _chinese_whispers_start = clock();
                 std::vector<unsigned long> labels;
                 const auto num_clusters = chinese_whispers(edges, labels);
 
@@ -228,8 +274,15 @@ int main(int argc, char *argv[])
 
                 printf("num_clusters = %d, labels size = %d\n", num_clusters, labels.size());
 
+                _chinese_whispers_end = clock();
+                {
+                    double seconds  =(double)(_chinese_whispers_end - _chinese_whispers_start)/CLOCKS_PER_SEC;
+                    fprintf(stderr, "Separate face use time is: %.8f\n", seconds);
+                }
+
                 if (num_clusters != 0)
                 {
+                    _cluster_start = clock();
                     isCatchedFlag = 1;  // 至少识别到了一张人脸
                     // 现在我们将这些面孔聚类结果显示到屏幕上. 你将会看到它会正确地将所有属于同一个人的面孔图像组织到一起.
                     //std::vector<image_window> win_clusters(num_clusters);
@@ -251,12 +304,17 @@ int main(int argc, char *argv[])
                         show_macthed_win.set_title(save_img_name);
                         show_macthed_win.set_image(macthed_img);
                     }
+                    _cluster_end = clock();
+                    {
+                        double seconds  =(double)(_cluster_end - _cluster_start)/CLOCKS_PER_SEC;
+                        fprintf(stderr, "Cluster use time is: %.8f\n", seconds);
+                    }
                 }
                 else
                 {
                     printf("Does not recognize anyone :(\n");
                 }
-            }
+            } 
         }
     }
     catch(serialization_error& e)
