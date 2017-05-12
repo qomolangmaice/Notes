@@ -1,0 +1,8 @@
+Linux下c++使用pthread库
+http://www.cnblogs.com/tla001/p/6323010.html
+
+Linux下面实现C++向对象多线程
+http://cissco.iteye.com/blog/410776
+
+linux C++ 类成员函数中创建线程，且能访问类中其他成员变量
+http://linkyou.blog.51cto.com/1332494/751852
