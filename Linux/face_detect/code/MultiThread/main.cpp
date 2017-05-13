@@ -2,16 +2,19 @@
 // 	run: ./main
 
 #include "MultiThread.h"
-#include <string>
 #include <iostream>
-#include <map>
 
 using namespace std;
 
 int main()
 {
+	pthread_t tid;
 	MultiThread mt;
-	mt.createThread();
+
+	mt.createThread(tid);
+	//mt.joinThread(tid);
+
+	mt.detachThread(tid);
 
 	return 0;
 }
