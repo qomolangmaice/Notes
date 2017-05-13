@@ -1,10 +1,12 @@
 #include "MultiThread.h"
-#include <string>
-#include <pthread.h>
+#include <iostream>
+#include <ctime>
+
+using namespace std;
 
 MultiThread::MultiThread()
 {
-	
+
 }
 
 MultiThread::~MultiThread()
@@ -23,13 +25,27 @@ void *threadFunction(void *arg)
 void MultiThread::sayHello(int r)
 {
 	printf("Hello world %d!\n", r);
+
+	//cout << "Hello world " << r << "!" << end;
 }
 
-void MultiThread::createThread()
+void MultiThread::createThread(pthread_t tid)
 {
 	p = 1;
 	q = 2;
-	pthread_t threadID;
-	pthread_create(&threadID, NULL, threadFunction, this);
-	getchar();
+	pthread_create(&tid, NULL, threadFunction, this);
+	//getchar();
+}
+
+void MultiThread::joinThread(pthread_t tid)
+{
+	pthread_join(tid, NULL);
+	cout << "After pthread_join.\n" << endl;
+}
+
+void MultiThread::detachThread(pthread_t tid)
+{
+	cout << "Before pthread_detach.\n" << endl;
+	pthread_detach(tid);
+	cout << "After pthread_detach.\n" << endl;
 }
