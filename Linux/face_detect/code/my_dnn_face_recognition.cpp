@@ -39,12 +39,18 @@
 #include <dlib/dnn.h>
 #include <dlib/image_io.h>
 
-#include <stdio.h>
-#include <time.h>
-
-#include <stdlib.h>
 #include <pthread.h>
+
+#include <stdio.h>
+#include <ctime>
+#include <string>
+
+#include <cstdlib>
 #include <unistd.h>
+#include <functional>
+#include <fcntl.h>   
+
+#include <fstream>
 
 using namespace dlib;
 using namespace std;
@@ -77,7 +83,15 @@ using anet_type = loss_metric<fc_no_bias<128,avg_pool_everything<
                             input_rgb_image_sized<150>
                             >>>>>>>>>>>>;
 
-void *face_rec_thread_func(void *ptr);
+typedef struct {
+    string frame_name;
+    string p_name;
+} FACE_REC_ST;
+
+// 给帧图像写入文件加线程互斥锁
+std::mutex tmp_frame_pic_mutex; 
+
+void *face_rec_thread_func(void* arg);
 
 int main(int argc, char *argv[])
 {
@@ -94,9 +108,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    pthread_t face_rec_thread_id;
-    int ret = 0;
-
     // 定义一个人脸检测器，用来查找图片中的人脸
     frontal_face_detector detector = get_frontal_face_detector();
 
@@ -104,28 +115,27 @@ int main(int argc, char *argv[])
     shape_predictor sp;
     deserialize("../data/shape_predictor_68_face_landmarks.dat") >> sp;
 
-    // 然后我们定义一个基于深度神经网络的人脸识别模型用来识别人脸.
-    anet_type net;
-    deserialize("../data/dlib_face_recognition_resnet_model_v1.dat") >> net;
-
     // 在屏幕上显示原始的图片
-    matrix<rgb_pixel> img;
-    load_image(img, argv[1]);
+    //matrix<rgb_pixel> img;
+    //load_image(img, argv[1]);
     //image_window win(img); 
 
     image_window show_win;
 
-    // 在屏幕上显示匹配好的的图片
-    matrix<rgb_pixel> macthed_img;
-    image_window show_macthed_win;
-
     string macthed_name = "";
 
-    clock_t _detect_face_start, _detect_face_end;
-    clock_t _DNN_net_start, _DNN_net_end;
-    clock_t _separate_face_start, _separate_face_end;
-    clock_t _cluster_start, _cluster_end;
-    clock_t _chinese_whispers_start, _chinese_whispers_end;
+    unsigned int isCatchedFlag = 0;
+
+    // 在屏幕上显示匹配好的的图片
+    matrix<rgb_pixel> saved_macthed_img;
+    image_window show_macthed_win;
+
+    // 将每帧图像写入到一个图片文件，将路径传入线程，这样就可以对图片中的人脸进行检测和识别了.
+    string frame_pic_name = "";
+
+    string saved_matched_img_name = "";
+
+    int ret = 0;
 
     try
     {
@@ -135,8 +145,6 @@ int main(int argc, char *argv[])
             cerr << "Unable to connect to camera" << endl;
             return 1;
         }
-
-        unsigned int isCatchedFlag = 0;
 
         // 抓取并处理视频帧图像，直到用户关闭当前显示视频窗口
         while(!show_win.is_closed())
@@ -189,132 +197,37 @@ int main(int argc, char *argv[])
                 show_win.add_overlay(show_faces[i]);    
             }
 
-            pthread_create(&face_rec_thread_id, NULL, face_rec_thread_func, NULL);
-            
-            //-----------------------------------------------------------------------------------------
-
             if (!isCatchedFlag && !shapes.empty())
             {
-                _detect_face_start = clock();           /*记录起始时间*/
-                // 在从视频流中抓取的一帧图像上运行人脸检测器，每个人脸提取一个副本，其中这个副本已被归一化到150x150像素大小, 并且具备适当的旋转中心。
-                std::vector<matrix<rgb_pixel>> faces;
+                frame_pic_name = "tmp_frame.bmp";
+                imwrite(frame_pic_name, frame);     // 摄像头抓取的一帧图像存入到图片文件
 
-                for (auto face : detector(cimg))
-                {
-                    auto shape = sp(cimg, face);
-                    matrix<rgb_pixel> face_chip;
-                    extract_image_chip(cimg, get_face_chip_details(shape,150,0.25), face_chip);
-                    faces.push_back(move(face_chip));
-                }
+                pthread_t face_rec_thread;
+                FACE_REC_ST face_rec_st;
 
-                for (auto face : detector(img))
-                {
-                    auto shape = sp(img, face);
-                    matrix<rgb_pixel> face_chip;
-                    extract_image_chip(img, get_face_chip_details(shape,150,0.25), face_chip);
-                    faces.push_back(move(face_chip));
-                }
+                face_rec_st.frame_name = frame_pic_name;
+                face_rec_st.p_name = argv[1];
 
-                if (faces.size() == 0)
-                {
-                    cout << "No faces found in image!" << endl;
-                    return 1;
-                }
+                pthread_create(&face_rec_thread, NULL, face_rec_thread_func, (void *)&face_rec_st);
+                pthread_detach(face_rec_thread);
+            }
 
-                _detect_face_end = clock();           /*记录结束时间*/
-                {
-                    double seconds  =(double)(_detect_face_end - _detect_face_start)/CLOCKS_PER_SEC;
-                    fprintf(stderr, "Detect faces use time is: %.8f\n", seconds);
-                }
-
-                _DNN_net_start = clock();
-
-                // 这个会调用深度神经网络来将人脸中的人脸图片转换成一个128D的向量
-                // 在这个向量空间中，来自同一个人的图像彼此是相似的，但是来自不同的人的向量却是相距甚远.
-                // 所以我们使用这些向量来识别这些图像的部分图像是来自同一个人，还是来自不同的人
-                std::vector<matrix<float,0,1>> face_descriptors = net(faces);
-
-                printf("face_descriptors size = %d\n", face_descriptors.size());
-
-                _DNN_net_end = clock();
-                {
-                    double seconds  =(double)(_DNN_net_end - _DNN_net_start)/CLOCKS_PER_SEC;
-                    fprintf(stderr, "DNN net use time is: %.8f\n", seconds);
-                }
-
-                _separate_face_start = clock();
-                // 值得注意的是，我们可以做的一件简单的事情是做人脸聚类。
-                // 下一步的代码创建一个图的连接面，然后使用中国耳语图聚类算法，以确定有多少人以及有哪些面孔属于谁
-                std::vector<sample_pair> edges;
-                for (size_t i = 0; i < face_descriptors.size(); ++i)
-                {
-                    for (size_t j = i+1; j < face_descriptors.size(); ++j)
-                    {
-                        // 如果图中的面孔足够接近，那么在图上它们就是连接在一起的.
-                        // 然后我们检查这些面孔的描述子之间的距离是否小于0.6, 0.6是我们训练深度神经网络的确定阀值
-                        // 当然你可以使用其他任意你觉得有用的阀值
-                        if (length(face_descriptors[i] - face_descriptors[j]) < 0.6)
-                        {
-                            edges.push_back(sample_pair(i,j));
-                        }
-                    }
-                }
-                _separate_face_end = clock();
-                {
-                    double seconds  =(double)(_separate_face_end - _separate_face_start)/CLOCKS_PER_SEC;
-                    fprintf(stderr, "Separate face use time is: %.8f\n", seconds);
-                }
-
-                _chinese_whispers_start = clock();
-                std::vector<unsigned long> labels;
-                const auto num_clusters = chinese_whispers(edges, labels);
-
-                // 这个将正确地指明这张图片中有多少个人
-                cout << "number of people found in the image: "<< num_clusters << endl;
-
-                printf("num_clusters = %d, labels size = %d\n", num_clusters, labels.size());
-
-                _chinese_whispers_end = clock();
-                {
-                    double seconds  =(double)(_chinese_whispers_end - _chinese_whispers_start)/CLOCKS_PER_SEC;
-                    fprintf(stderr, "Separate face use time is: %.8f\n", seconds);
-                }
-
-                if (num_clusters != 0)
-                {
-                    _cluster_start = clock();
-                    isCatchedFlag = 1;  // 至少识别到了一张人脸
-                    // 现在我们将这些面孔聚类结果显示到屏幕上. 你将会看到它会正确地将所有属于同一个人的面孔图像组织到一起.
-                    //std::vector<image_window> win_clusters(num_clusters);
-                    for (size_t cluster_id = 0; cluster_id < num_clusters; ++cluster_id)
-                    {
-                        std::vector<matrix<rgb_pixel>> cluster_temp;
-                        for (size_t j = 0; j < labels.size(); ++j)
-                        {
-                            if (cluster_id == labels[j])
-                                cluster_temp.push_back(faces[j]);
-                        }
-                        //win_clusters[cluster_id].set_title("face cluster " + cast_to_string(cluster_id));
-                        //win_clusters[cluster_id].set_image(tile_images(cluster_temp));
-                        
-                        string save_img_name = argv[1];
-                        save_img_name = save_img_name + "-macthed.bmp";
-                        save_bmp(tile_images(cluster_temp), save_img_name);
-                        load_image(macthed_img, save_img_name);
-                        show_macthed_win.set_title(save_img_name);
-                        show_macthed_win.set_image(macthed_img);
-                    }
-                    _cluster_end = clock();
-                    {
-                        double seconds  =(double)(_cluster_end - _cluster_start)/CLOCKS_PER_SEC;
-                        fprintf(stderr, "Cluster use time is: %.8f\n", seconds);
-                    }
-                }
-                else
-                {
-                    printf("Does not recognize anyone :(\n");
-                }
-            } 
+            saved_matched_img_name = argv[1];
+            saved_matched_img_name = saved_matched_img_name + "-macthed.bmp";
+            const char *img_file_name = saved_matched_img_name.c_str();
+            ret = access(img_file_name, F_OK);
+            if(ret != -1)
+            {
+                cout << "Binggo!" << endl;
+                isCatchedFlag = 1;
+                load_image(saved_macthed_img, saved_matched_img_name);
+                show_macthed_win.set_title(saved_matched_img_name);
+                show_macthed_win.set_image(saved_macthed_img); 
+            }
+            else
+            {
+                continue;
+            }
         }
     }
     catch(serialization_error& e)
@@ -324,10 +237,176 @@ int main(int argc, char *argv[])
         cout << "   http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" << endl;
         cout << endl << e.what() << endl;
     }
-
     catch(exception& e)
     {
         cout << e.what() << endl;
-    }
+    }   
+
+    return 0;
 }
 
+void *face_rec_thread_func(void* arg)
+{
+    string tmp_frame_pic_name = "";
+    string pic_name = "";
+
+    FACE_REC_ST *face_rec_st = (FACE_REC_ST *)arg;
+
+    tmp_frame_pic_name = face_rec_st->frame_name;
+    pic_name =  face_rec_st->p_name;
+
+    std::cout << "tmp_frame_pic_name: " << tmp_frame_pic_name << std::endl;
+    std::cout << "pic_name: " << pic_name << std::endl;
+
+    // 将截取视频流生成的图片转换成matrix对象
+    matrix<rgb_pixel> cap_img;
+
+    tmp_frame_pic_mutex.lock();     // 帧图像加互斥锁
+    load_image(cap_img, tmp_frame_pic_name);
+    tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
+
+
+    // 定义一个人脸检测器，用来查找图片中的人脸
+    frontal_face_detector detector = get_frontal_face_detector();
+
+    // 我们也将使用人脸特征点模型将从图片中抓取的人脸对齐成一个标准的人脸
+    shape_predictor sp;
+    deserialize("../data/shape_predictor_68_face_landmarks.dat") >> sp;
+
+    // 然后我们定义一个基于深度神经网络的人脸识别模型用来识别人脸.
+    anet_type net;
+    deserialize("../data/dlib_face_recognition_resnet_model_v1.dat") >> net;
+
+    clock_t _detect_face_start, _detect_face_end;
+    clock_t _DNN_net_start, _DNN_net_end;
+    clock_t _separate_face_start, _separate_face_end;
+    clock_t _cluster_start, _cluster_end;
+    clock_t _chinese_whispers_start, _chinese_whispers_end;
+
+    // 将待识别的人脸图片转换成matrix对象
+    matrix<rgb_pixel> img;
+    load_image(img, pic_name);
+
+    _detect_face_start = clock(); // 记录起始时间
+
+    // 在从视频流中抓取的一帧图像上运行人脸检测器，每个人脸提取一个副本，其中这个副本已被归一化到150x150像素大小, 并且具备适当的旋转中心。
+    std::vector<matrix<rgb_pixel>> faces;
+
+    for (auto face : detector(cap_img))
+    {
+        auto shape = sp(cap_img, face);
+        matrix<rgb_pixel> face_chip;
+        extract_image_chip(cap_img, get_face_chip_details(shape,150,0.25), face_chip);
+        faces.push_back(move(face_chip));
+    }
+
+    for (auto face : detector(img))
+    {
+        auto shape = sp(img, face);
+        matrix<rgb_pixel> face_chip;
+        extract_image_chip(img, get_face_chip_details(shape,150,0.25), face_chip);
+        faces.push_back(move(face_chip));
+    }
+
+    if (faces.size() == 0)
+    {
+        cout << "No faces found in image!" << endl;
+        //return ;
+    }
+
+    _detect_face_end = clock();           // 记录结束时间
+    {
+        double seconds  =(double)(_detect_face_end - _detect_face_start)/CLOCKS_PER_SEC;
+        fprintf(stderr, "Detect faces use time is: %.8f\n", seconds);
+    }
+
+    _DNN_net_start = clock();
+
+    // 这个会调用深度神经网络来将人脸中的人脸图片转换成一个128D的向量
+    // 在这个向量空间中，来自同一个人的图像彼此是相似的，但是来自不同的人的向量却是相距甚远.
+    // 所以我们使用这些向量来识别这些图像的部分图像是来自同一个人，还是来自不同的人
+    std::vector<matrix<float,0,1>> face_descriptors = net(faces);
+
+    printf("face_descriptors size = %d\n", face_descriptors.size());
+
+    _DNN_net_end = clock();
+    {
+        double seconds  =(double)(_DNN_net_end - _DNN_net_start)/CLOCKS_PER_SEC;
+        fprintf(stderr, "DNN net use time is: %.8f\n", seconds);
+    }
+
+    _separate_face_start = clock();
+    // 值得注意的是，我们可以做的一件简单的事情是做人脸聚类。
+    // 下一步的代码创建一个图的连接面，然后使用中国耳语图聚类算法，以确定有多少人以及有哪些面孔属于谁
+    std::vector<sample_pair> edges;
+    for (size_t i = 0; i < face_descriptors.size(); ++i)
+    {
+        for (size_t j = i+1; j < face_descriptors.size(); ++j)
+        {
+            // 如果图中的面孔足够接近，那么在图上它们就是连接在一起的.
+            // 然后我们检查这些面孔的描述子之间的距离是否小于0.6, 0.6是我们训练深度神经网络的确定阀值
+            // 当然你可以使用其他任意你觉得有用的阀值
+            if (length(face_descriptors[i] - face_descriptors[j]) < 0.6)
+            {
+                edges.push_back(sample_pair(i,j));
+            }
+        }
+    }
+    _separate_face_end = clock();
+    {
+        double seconds  =(double)(_separate_face_end - _separate_face_start)/CLOCKS_PER_SEC;
+        fprintf(stderr, "Separate face use time is: %.8f\n", seconds);
+    }
+
+    _chinese_whispers_start = clock();
+    std::vector<unsigned long> labels;
+    const auto num_clusters = chinese_whispers(edges, labels);
+
+    // 这个将正确地指明这张图片中有多少个人
+    cout << "number of people found in the image: "<< num_clusters << endl;
+
+    printf("num_clusters = %d, labels size = %d\n", num_clusters, labels.size());
+
+    _chinese_whispers_end = clock();
+    {
+        double seconds  =(double)(_chinese_whispers_end - _chinese_whispers_start)/CLOCKS_PER_SEC;
+        fprintf(stderr, "Separate face use time is: %.8f\n", seconds);
+    }
+
+    if (num_clusters != 0)
+    {
+        _cluster_start = clock();
+        // 现在我们将这些面孔聚类结果显示到屏幕上. 你将会看到它会正确地将所有属于同一个人的面孔图像组织到一起.
+        //std::vector<image_window> win_clusters(num_clusters);
+        for (size_t cluster_id = 0; cluster_id < num_clusters; ++cluster_id)
+        {
+            std::vector<matrix<rgb_pixel>> cluster_temp;
+            for (size_t j = 0; j < labels.size(); ++j)
+            {
+                if (cluster_id == labels[j])
+                    cluster_temp.push_back(faces[j]);
+            }
+            //win_clusters[cluster_id].set_title("face cluster " + cast_to_string(cluster_id));
+            //win_clusters[cluster_id].set_image(tile_images(cluster_temp));
+            
+            string save_img_name = pic_name;
+            save_img_name = save_img_name + "-macthed.bmp";
+            save_bmp(tile_images(cluster_temp), save_img_name);
+            cout << "Saved match!" << endl;
+            //load_image(macthed_img, save_img_name);
+            //show_macthed_win.set_title(save_img_name);
+            //show_macthed_win.set_image(macthed_img);
+        }
+        _cluster_end = clock();
+        {
+            double seconds  =(double)(_cluster_end - _cluster_start)/CLOCKS_PER_SEC;
+            fprintf(stderr, "Cluster use time is: %.8f\n", seconds);
+        }
+    }
+    else
+    {
+        printf("Does not recognize anyone :(\n");
+    }
+
+    pthread_exit(NULL);
+}
