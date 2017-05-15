@@ -12,3 +12,14 @@ https://github.com/tjgerot/WannaCrySamples
 
 A Stealthy Trojan Spyware (keylogger-spyware-malware-worm-spy-virus-undetectable-computer-windows-pc)
 https://github.com/MinhasKamal/TrojanCockroach
+
+Richkware
+Framework for building Windows malwares, written in C++.
+It's a library of network and OS functions, that you can use to create a malware. The composition of these functions permits the application to assume behaviors referable to the following types of malware:
+Virus
+Worms
+Bot
+Spyware
+Keylogger
+Scareware
+https://github.com/richkmeli/Richkware
