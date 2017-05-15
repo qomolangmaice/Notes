@@ -426,7 +426,7 @@ void *face_rec_thread_func(void* arg)
 
     tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
 
-    Delay(50);  // 让face_rec_thread线程有足够时间去解锁
+    Delay(10);  // 让face_rec_thread线程有足够时间去解锁
 
     pthread_exit(NULL);
 }
