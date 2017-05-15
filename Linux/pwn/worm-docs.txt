@@ -1,0 +1,9 @@
+Worm implemented in Python
+https://github.com/keniel123/Worm
+
+Simple worm
+https://github.com/rafaelravedutti/worm
+
+The original Morris Worm source code
+https://github.com/arialdomartini/morris-worm
+
