@@ -7,3 +7,5 @@ https://github.com/rafaelravedutti/worm
 The original Morris Worm source code
 https://github.com/arialdomartini/morris-worm
 
+Sample files from WannaCry ransomware infections
+https://github.com/tjgerot/WannaCrySamples
