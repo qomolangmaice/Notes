@@ -32,3 +32,6 @@ http://blog.163.com/yuyang_tech/blog/static/21605008320146822636587/
 
 openface survey心得
 http://luvjennifer-tw-blog.logdown.com/posts/2016/10/17/openface-survey-experience
+
+opencv载入，显示及保存图像
+http://www.cnblogs.com/xuepei/p/4126328.html
