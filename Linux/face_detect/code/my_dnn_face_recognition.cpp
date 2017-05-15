@@ -199,12 +199,19 @@ int main(int argc, char *argv[])
 
             if (!isCatchedFlag && !shapes.empty())
             {
-                cout << "Start to imwrite img ... " << endl;
                 frame_pic_name = "tmp_frame.bmp";
-                imwrite(frame_pic_name, frame);     // 摄像头抓取的一帧图像存入到图片文件
-                Delay(50);  // 让主线程有足够时间生成完整图像
+                const char *frame_file_name = frame_pic_name.c_str();
+                ret = access(frame_file_name, W_OK);
+                if (ret != -1)
+                {  
+                    cout << "frame_pic_name can be written! :)" << endl;
+                    imwrite(frame_pic_name, frame);     // 摄像头抓取的一帧图像存入到图片文件
+                }
+                else
+                {   
+                    cout << "frame_pic_name can not be written! :(" << endl;
+                }
 
-                cout << "Start to create thread ... " << endl;
                 pthread_t face_rec_thread;
                 FACE_REC_ST face_rec_st;
 
@@ -257,7 +264,6 @@ void Delay(int time)  //time*1000为秒数
 
 void *face_rec_thread_func(void* arg)
 {
-    Delay(50);
     string tmp_frame_pic_name = "";
     string pic_name = "";
 
