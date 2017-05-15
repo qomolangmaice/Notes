@@ -202,6 +202,7 @@ int main(int argc, char *argv[])
                 cout << "Start to imwrite img ... " << endl;
                 frame_pic_name = "tmp_frame.bmp";
                 imwrite(frame_pic_name, frame);     // 摄像头抓取的一帧图像存入到图片文件
+                Delay(50);  // 让主线程有足够时间生成完整图像
 
                 cout << "Start to create thread ... " << endl;
                 pthread_t face_rec_thread;
@@ -256,7 +257,7 @@ void Delay(int time)  //time*1000为秒数
 
 void *face_rec_thread_func(void* arg)
 {
-    Delay(10);
+    Delay(50);
     string tmp_frame_pic_name = "";
     string pic_name = "";
 
@@ -418,6 +419,8 @@ void *face_rec_thread_func(void* arg)
     }
 
     tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
+
+    Delay(50);  // 让face_rec_thread线程有足够时间去解锁
 
     pthread_exit(NULL);
 }
