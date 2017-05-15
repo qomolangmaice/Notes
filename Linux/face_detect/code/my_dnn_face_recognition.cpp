@@ -51,6 +51,8 @@
 #include <fcntl.h>   
 #include <ctime>
 
+#define MAX_THREAD_NUM 1000
+
 using namespace dlib;
 using namespace std;
 
@@ -138,6 +140,10 @@ int main(int argc, char *argv[])
 
     int ret = 0;
 
+    pthread_t face_rec_thread[MAX_THREAD_NUM];
+    FACE_REC_ST face_rec_st;
+    unsigned int thread_count = 0;
+
     try
     {
         cv::VideoCapture cap(0);
@@ -212,14 +218,16 @@ int main(int argc, char *argv[])
                     cout << "frame_pic_name can not be written! :(" << endl;
                 }
 
-                pthread_t face_rec_thread;
-                FACE_REC_ST face_rec_st;
-
                 face_rec_st.frame_name = frame_pic_name;
                 face_rec_st.p_name = argv[1];
                 
-                pthread_create(&face_rec_thread, NULL, face_rec_thread_func, (void *)&face_rec_st);
-                pthread_detach(face_rec_thread);
+                if (thread_count >= MAX_THREAD_NUM)
+                    thread_count = 0;
+                else
+                    thread_count++;
+                cout << "thread_count = " << thread_count << endl;
+                pthread_create(&face_rec_thread[thread_count], NULL, face_rec_thread_func, (void *)&face_rec_st);
+                pthread_detach(face_rec_thread[thread_count]);
             }
 
             saved_matched_img_name = argv[1];
@@ -264,7 +272,13 @@ void Delay(int time)  //time*1000为秒数
 
 void *face_rec_thread_func(void* arg)
 {
-    Delay(10);
+    Delay(50);
+
+    clock_t _detect_face_start, _detect_face_end;
+    clock_t _DNN_net_start, _DNN_net_end;
+    clock_t _separate_face_start, _separate_face_end;
+    clock_t _cluster_start, _cluster_end;
+    clock_t _chinese_whispers_start, _chinese_whispers_end;
 
     int ret = 0;
     string tmp_frame_pic_name = "";
@@ -278,6 +292,12 @@ void *face_rec_thread_func(void* arg)
     std::cout << "tmp_frame_pic_name: " << tmp_frame_pic_name << std::endl;
     std::cout << "pic_name: " << pic_name << std::endl;
 
+    // 将待识别的人脸图片转换成matrix对象
+    matrix<rgb_pixel> img;
+    load_image(img, pic_name);
+
+    std::cout << "Load 'pic_name' done." << std::endl;
+
     // 将截取视频流生成的图片转换成matrix对象
     matrix<rgb_pixel> cap_img;
 
@@ -287,12 +307,12 @@ void *face_rec_thread_func(void* arg)
     ret = access(tmp_frame_file_name, R_OK);    // 如果已经保存的帧图像不能读，则结束当前线程
     if (ret == -1)
     {  
-        cout << "frame_pic_name can not be written! :(" << endl;
+        cout << "frame_pic_name can not be read! :(" << endl;
         tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
         pthread_exit(NULL);
     }
-    
     load_image(cap_img, tmp_frame_pic_name);
+    std::cout << "Load 'tmp_frame.bmp' done." << std::endl;
 
     // 定义一个人脸检测器，用来查找图片中的人脸
     frontal_face_detector detector = get_frontal_face_detector();
@@ -304,16 +324,6 @@ void *face_rec_thread_func(void* arg)
     // 然后我们定义一个基于深度神经网络的人脸识别模型用来识别人脸.
     anet_type net;
     deserialize("../data/dlib_face_recognition_resnet_model_v1.dat") >> net;
-
-    clock_t _detect_face_start, _detect_face_end;
-    clock_t _DNN_net_start, _DNN_net_end;
-    clock_t _separate_face_start, _separate_face_end;
-    clock_t _cluster_start, _cluster_end;
-    clock_t _chinese_whispers_start, _chinese_whispers_end;
-
-    // 将待识别的人脸图片转换成matrix对象
-    matrix<rgb_pixel> img;
-    load_image(img, pic_name);
 
     _detect_face_start = clock(); // 记录起始时间
 
@@ -439,7 +449,7 @@ void *face_rec_thread_func(void* arg)
 
     tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
 
-    Delay(10);  // 让face_rec_thread线程有足够时间去解锁
+    Delay(100);  // 让face_rec_thread线程有足够时间去解锁
 
     pthread_exit(NULL);
 }
