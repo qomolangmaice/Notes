@@ -9,3 +9,6 @@ https://github.com/arialdomartini/morris-worm
 
 Sample files from WannaCry ransomware infections
 https://github.com/tjgerot/WannaCrySamples
+
+A Stealthy Trojan Spyware (keylogger-spyware-malware-worm-spy-virus-undetectable-computer-windows-pc)
+https://github.com/MinhasKamal/TrojanCockroach
