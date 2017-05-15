@@ -264,6 +264,9 @@ void Delay(int time)  //time*1000为秒数
 
 void *face_rec_thread_func(void* arg)
 {
+    Delay(10);
+
+    int ret = 0;
     string tmp_frame_pic_name = "";
     string pic_name = "";
 
@@ -279,6 +282,16 @@ void *face_rec_thread_func(void* arg)
     matrix<rgb_pixel> cap_img;
 
     tmp_frame_pic_mutex.lock();     // 帧图像加互斥锁
+
+    const char *tmp_frame_file_name = tmp_frame_pic_name.c_str();
+    ret = access(tmp_frame_file_name, R_OK);    // 如果已经保存的帧图像不能读，则结束当前线程
+    if (ret == -1)
+    {  
+        cout << "frame_pic_name can not be written! :(" << endl;
+        tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
+        pthread_exit(NULL);
+    }
+    
     load_image(cap_img, tmp_frame_pic_name);
 
     // 定义一个人脸检测器，用来查找图片中的人脸
