@@ -49,8 +49,7 @@
 #include <unistd.h>
 #include <functional>
 #include <fcntl.h>   
-
-#include <fstream>
+#include <ctime>
 
 using namespace dlib;
 using namespace std;
@@ -92,6 +91,8 @@ typedef struct {
 std::mutex tmp_frame_pic_mutex; 
 
 void *face_rec_thread_func(void* arg);
+
+void Delay(int time); //time*1000为秒数 
 
 int main(int argc, char *argv[])
 {
@@ -148,7 +149,6 @@ int main(int argc, char *argv[])
 
         // 抓取并处理视频帧图像，直到用户关闭当前显示视频窗口
         while(!show_win.is_closed())
-        //while(cv::waitKey(30) != 27)    // Press 'Esc' to quit the program
         {
             // 抓取一帧图像
             cv::Mat frame;
@@ -199,15 +199,17 @@ int main(int argc, char *argv[])
 
             if (!isCatchedFlag && !shapes.empty())
             {
+                cout << "Start to imwrite img ... " << endl;
                 frame_pic_name = "tmp_frame.bmp";
                 imwrite(frame_pic_name, frame);     // 摄像头抓取的一帧图像存入到图片文件
 
+                cout << "Start to create thread ... " << endl;
                 pthread_t face_rec_thread;
                 FACE_REC_ST face_rec_st;
 
                 face_rec_st.frame_name = frame_pic_name;
                 face_rec_st.p_name = argv[1];
-
+                
                 pthread_create(&face_rec_thread, NULL, face_rec_thread_func, (void *)&face_rec_st);
                 pthread_detach(face_rec_thread);
             }
@@ -215,10 +217,10 @@ int main(int argc, char *argv[])
             saved_matched_img_name = argv[1];
             saved_matched_img_name = saved_matched_img_name + "-macthed.bmp";
             const char *img_file_name = saved_matched_img_name.c_str();
-            ret = access(img_file_name, F_OK);
-            if(ret != -1)
+            ret = access(img_file_name, F_OK);  // 文件是否已经存在
+            if(ret != -1 && !isCatchedFlag)
             {
-                cout << "Binggo!" << endl;
+                cout << "Bingo!" << endl;
                 isCatchedFlag = 1;
                 load_image(saved_macthed_img, saved_matched_img_name);
                 show_macthed_win.set_title(saved_matched_img_name);
@@ -245,8 +247,16 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+void Delay(int time)  //time*1000为秒数 
+{ 
+    clock_t now = clock(); 
+
+    while(clock() - now < time); 
+}
+
 void *face_rec_thread_func(void* arg)
 {
+    Delay(10);
     string tmp_frame_pic_name = "";
     string pic_name = "";
 
@@ -263,8 +273,6 @@ void *face_rec_thread_func(void* arg)
 
     tmp_frame_pic_mutex.lock();     // 帧图像加互斥锁
     load_image(cap_img, tmp_frame_pic_name);
-    tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
-
 
     // 定义一个人脸检测器，用来查找图片中的人脸
     frontal_face_detector detector = get_frontal_face_detector();
@@ -311,7 +319,8 @@ void *face_rec_thread_func(void* arg)
     if (faces.size() == 0)
     {
         cout << "No faces found in image!" << endl;
-        //return ;
+        tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
+        pthread_exit(NULL);
     }
 
     _detect_face_end = clock();           // 记录结束时间
@@ -327,7 +336,7 @@ void *face_rec_thread_func(void* arg)
     // 所以我们使用这些向量来识别这些图像的部分图像是来自同一个人，还是来自不同的人
     std::vector<matrix<float,0,1>> face_descriptors = net(faces);
 
-    printf("face_descriptors size = %d\n", face_descriptors.size());
+    cout << "face_descriptors size = " << face_descriptors.size() << endl;
 
     _DNN_net_end = clock();
     {
@@ -365,7 +374,7 @@ void *face_rec_thread_func(void* arg)
     // 这个将正确地指明这张图片中有多少个人
     cout << "number of people found in the image: "<< num_clusters << endl;
 
-    printf("num_clusters = %d, labels size = %d\n", num_clusters, labels.size());
+    cout << "num_clusters = " << num_clusters << ", labels size = " << labels.size() << endl;
 
     _chinese_whispers_end = clock();
     {
@@ -407,6 +416,8 @@ void *face_rec_thread_func(void* arg)
     {
         printf("Does not recognize anyone :(\n");
     }
+
+    tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
 
     pthread_exit(NULL);
 }
