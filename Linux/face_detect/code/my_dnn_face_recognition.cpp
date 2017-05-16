@@ -194,24 +194,38 @@ int main(int argc, char *argv[])
                         //putText(frame, to_string(j), cvPoint(shapes[0].part(j).x(), shapes[0].part(j).y()), CV_FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 0, 0),1,4);
                         //  shapes[0].part(j).x();//68个  
                     } 
-                }
-
-                show_win.clear_overlay();
-                show_win.set_title("Face Recognition");
-                show_win.set_image(cimg);
+                } 
+                //show_win.clear_overlay();
+                //show_win.set_title("Face Recognition");
+                //show_win.set_image(cimg);
                 // 还有我们给这些人脸画了一个矩形框，这样我们就可以看到探测器在找他们
-                show_win.add_overlay(show_faces[i]);    
+                //show_win.add_overlay(show_faces[i]);    
             }
+
+            show_win.clear_overlay();
+            show_win.set_title("Face Recognition");
+            show_win.set_image(cimg);
+
+            cout << "isCatchedFlag = " << isCatchedFlag << endl;
 
             if (!isCatchedFlag && !shapes.empty())
             {
-                frame_pic_name = "tmp_frame.bmp";
+                frame_pic_name = "tmp_frame.bmps";
                 const char *frame_file_name = frame_pic_name.c_str();
                 ret = access(frame_file_name, W_OK);
                 if (ret != -1)
                 {  
                     cout << "frame_pic_name can be written! :)" << endl;
-                    imwrite(frame_pic_name, frame);     // 摄像头抓取的一帧图像存入到图片文件
+                    save_bmp(cimg, frame_pic_name);
+                    /*
+                    try {
+                        imwrite(frame_pic_name, frame);     // 摄像头抓取的一帧图像存入到图片文件
+                    }
+                    catch (runtime_error & e) {
+                        fprintf(stderr, "imwrite a img error: %s\n", e.what());
+                        continue;
+                    }
+                    */
                 }
                 else
                 {   
@@ -272,8 +286,6 @@ void Delay(int time)  //time*1000为秒数
 
 void *face_rec_thread_func(void* arg)
 {
-    Delay(50);
-
     clock_t _detect_face_start, _detect_face_end;
     clock_t _DNN_net_start, _DNN_net_end;
     clock_t _separate_face_start, _separate_face_end;
@@ -449,7 +461,7 @@ void *face_rec_thread_func(void* arg)
 
     tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
 
-    Delay(100);  // 让face_rec_thread线程有足够时间去解锁
+    //Delay(50);  // 让face_rec_thread线程有足够时间去解锁
 
     pthread_exit(NULL);
 }
