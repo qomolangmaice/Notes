@@ -27,6 +27,8 @@
     2011.  SSE4 is the next fastest and is supported by most current machines.  
 */
 
+// Compile: $ cd my_dnn_face_recognition/build/
+//          $ time cmake --build .
 #include <dlib/opencv.h>
 #include <opencv2/opencv.hpp>
 #include <dlib/image_processing/frontal_face_detector.h>
@@ -50,8 +52,9 @@
 #include <functional>
 #include <fcntl.h>   
 #include <ctime>
+#include <sys/stat.h>    
 
-#define MAX_THREAD_NUM 1000
+#define MAX_THREAD_NUM   1000
 
 using namespace dlib;
 using namespace std;
@@ -85,7 +88,7 @@ using anet_type = loss_metric<fc_no_bias<128,avg_pool_everything<
                             >>>>>>>>>>>>;
 
 typedef struct {
-    string frame_name;
+    cv::Mat cap_frame;
     string p_name;
 } FACE_REC_ST;
 
@@ -93,8 +96,6 @@ typedef struct {
 std::mutex tmp_frame_pic_mutex; 
 
 void *face_rec_thread_func(void* arg);
-
-void Delay(int time); //time*1000为秒数 
 
 int main(int argc, char *argv[])
 {
@@ -193,46 +194,23 @@ int main(int argc, char *argv[])
                         //每个特征点的编号
                         //putText(frame, to_string(j), cvPoint(shapes[0].part(j).x(), shapes[0].part(j).y()), CV_FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 0, 0),1,4);
                         //  shapes[0].part(j).x();//68个  
-                    } 
-                } 
-                //show_win.clear_overlay();
-                //show_win.set_title("Face Recognition");
-                //show_win.set_image(cimg);
-                // 还有我们给这些人脸画了一个矩形框，这样我们就可以看到探测器在找他们
-                //show_win.add_overlay(show_faces[i]);    
+                    }
+                    // 以下方案存在Bug! 当前帧中没有人脸时，视频流画面会卡住，囧~~
+                    //show_win.clear_overlay();
+                    //show_win.set_title("Face Recognition");
+                    //show_win.set_image(cimg);
+                    // 还有我们给这些人脸画了一个矩形框，这样我们就可以看到探测器在找他们
+                    //show_win.add_overlay(show_faces[i]);   
+                }
             }
-
             show_win.clear_overlay();
             show_win.set_title("Face Recognition");
-            show_win.set_image(cimg);
+            show_win.set_image(cimg); 
 
             cout << "isCatchedFlag = " << isCatchedFlag << endl;
-
             if (!isCatchedFlag && !shapes.empty())
             {
-                frame_pic_name = "tmp_frame.bmps";
-                const char *frame_file_name = frame_pic_name.c_str();
-                ret = access(frame_file_name, W_OK);
-                if (ret != -1)
-                {  
-                    cout << "frame_pic_name can be written! :)" << endl;
-                    save_bmp(cimg, frame_pic_name);
-                    /*
-                    try {
-                        imwrite(frame_pic_name, frame);     // 摄像头抓取的一帧图像存入到图片文件
-                    }
-                    catch (runtime_error & e) {
-                        fprintf(stderr, "imwrite a img error: %s\n", e.what());
-                        continue;
-                    }
-                    */
-                }
-                else
-                {   
-                    cout << "frame_pic_name can not be written! :(" << endl;
-                }
-
-                face_rec_st.frame_name = frame_pic_name;
+                face_rec_st.cap_frame = frame;
                 face_rec_st.p_name = argv[1];
                 
                 if (thread_count >= MAX_THREAD_NUM)
@@ -277,13 +255,6 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void Delay(int time)  //time*1000为秒数 
-{ 
-    clock_t now = clock(); 
-
-    while(clock() - now < time); 
-}
-
 void *face_rec_thread_func(void* arg)
 {
     clock_t _detect_face_start, _detect_face_end;
@@ -292,39 +263,23 @@ void *face_rec_thread_func(void* arg)
     clock_t _cluster_start, _cluster_end;
     clock_t _chinese_whispers_start, _chinese_whispers_end;
 
-    int ret = 0;
-    string tmp_frame_pic_name = "";
+    cv::Mat frame;
     string pic_name = "";
 
     FACE_REC_ST *face_rec_st = (FACE_REC_ST *)arg;
 
-    tmp_frame_pic_name = face_rec_st->frame_name;
+    frame = face_rec_st->cap_frame;
     pic_name =  face_rec_st->p_name;
-
-    std::cout << "tmp_frame_pic_name: " << tmp_frame_pic_name << std::endl;
-    std::cout << "pic_name: " << pic_name << std::endl;
 
     // 将待识别的人脸图片转换成matrix对象
     matrix<rgb_pixel> img;
     load_image(img, pic_name);
-
     std::cout << "Load 'pic_name' done." << std::endl;
-
-    // 将截取视频流生成的图片转换成matrix对象
-    matrix<rgb_pixel> cap_img;
 
     tmp_frame_pic_mutex.lock();     // 帧图像加互斥锁
 
-    const char *tmp_frame_file_name = tmp_frame_pic_name.c_str();
-    ret = access(tmp_frame_file_name, R_OK);    // 如果已经保存的帧图像不能读，则结束当前线程
-    if (ret == -1)
-    {  
-        cout << "frame_pic_name can not be read! :(" << endl;
-        tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
-        pthread_exit(NULL);
-    }
-    load_image(cap_img, tmp_frame_pic_name);
-    std::cout << "Load 'tmp_frame.bmp' done." << std::endl;
+    // 将截取视频流的一帧转换成cv_image对象
+    cv_image<bgr_pixel> cap_img(frame);
 
     // 定义一个人脸检测器，用来查找图片中的人脸
     frontal_face_detector detector = get_frontal_face_detector();
@@ -460,8 +415,5 @@ void *face_rec_thread_func(void* arg)
     }
 
     tmp_frame_pic_mutex.unlock();   // 帧图像解互斥锁
-
-    //Delay(50);  // 让face_rec_thread线程有足够时间去解锁
-
     pthread_exit(NULL);
 }
