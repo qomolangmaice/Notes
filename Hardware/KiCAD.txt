@@ -1,0 +1,5 @@
+ KiCad常用元器件库
+ http://blog.csdn.net/yannanxiu/article/details/52643410
+ 
+ KiCAD教程
+ http://bbs.elecfans.com/space-uid-2164708.html
