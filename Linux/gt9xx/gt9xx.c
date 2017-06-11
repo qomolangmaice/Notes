@@ -74,36 +74,38 @@ Output:
 *********************************************************/
 s32 gtp_i2c_read(struct i2c_client *client, u8 *buf, s32 len)
 {
-    struct i2c_msg msgs[2];
-    s32 ret=-1;
-    s32 retries = 0;
+	struct i2c_msg msgs[2];
+	s32 ret=-1;
+	s32 retries = 0;
 
-    GTP_DEBUG_FUNC();
+	GTP_DEBUG_FUNC();
 
-    msgs[0].flags = !I2C_M_RD;
-    msgs[0].addr  = client->addr;
-    msgs[0].len   = GTP_ADDR_LENGTH;
-    msgs[0].buf   = &buf[0];
-    //msgs[0].scl_rate = 300 * 1000;    // for Rockchip
-    
-    msgs[1].flags = I2C_M_RD;
-    msgs[1].addr  = client->addr;
-    msgs[1].len   = len - GTP_ADDR_LENGTH;
-    msgs[1].buf   = &buf[GTP_ADDR_LENGTH];
-    //msgs[1].scl_rate = 300 * 1000;
+	msgs[0].flags = !I2C_M_RD;
+	msgs[0].addr  = client->addr;
+	msgs[0].len   = GTP_ADDR_LENGTH;
+	msgs[0].buf   = &buf[0];
+	//msgs[0].scl_rate = 300 * 1000;    // for Rockchip
 
-    while(retries < 5)
-    {
-        ret = i2c_transfer(client->adapter, msgs, 2);
-        if(ret == 2)break;
-        retries++;
-    }
-    if((retries >= 5))
-    {
-        GTP_DEBUG("I2C communication timeout, resetting chip...");
-        gtp_reset_guitar(client, 10);
-    }
-    return ret;
+	msgs[1].flags = I2C_M_RD;
+	msgs[1].addr  = client->addr;
+	msgs[1].len   = len - GTP_ADDR_LENGTH;
+	msgs[1].buf   = &buf[GTP_ADDR_LENGTH];
+	//msgs[1].scl_rate = 300 * 1000;
+
+	while(retries < 5)
+	{
+		ret = i2c_transfer(client->adapter, msgs, 2);
+		if(ret == 2)break;
+		retries++;
+	}
+	
+	if((retries >= 5))
+	{
+		GTP_DEBUG("I2C communication timeout, resetting chip...");
+		gtp_reset_guitar(client, 10);
+	}
+	
+	return ret;
 }
 
 /*******************************************************
@@ -120,30 +122,31 @@ Output:
 *********************************************************/
 s32 gtp_i2c_write(struct i2c_client *client,u8 *buf,s32 len)
 {
-    struct i2c_msg msg;
-    s32 ret = -1;
-    s32 retries = 0;
+	struct i2c_msg msg;
+	s32 ret = -1;
+	s32 retries = 0;
 
-    GTP_DEBUG_FUNC();
+	GTP_DEBUG_FUNC();
 
-    msg.flags = !I2C_M_RD;
-    msg.addr  = client->addr;
-    msg.len   = len;
-    msg.buf   = buf;
-    //msg.scl_rate = 300 * 1000;    // for Rockchip
+	msg.flags = !I2C_M_RD;
+	msg.addr  = client->addr;
+	msg.len   = len;
+	msg.buf   = buf;
+	//msg.scl_rate = 300 * 1000;    // for Rockchip
 
-    while(retries < 5)
-    {
-        ret = i2c_transfer(client->adapter, &msg, 1);
-        if (ret == 1)break;
-        retries++;
-    }
-    if((retries >= 5))
-    {
-        GTP_DEBUG("I2C communication timeout, resetting chip...");
-        gtp_reset_guitar(client, 10);
-    }
-    return ret;
+	while(retries < 5)
+	{
+		ret = i2c_transfer(client->adapter, &msg, 1);
+		if (ret == 1)
+			break;
+		retries++;
+	}
+	if((retries >= 5))
+	{
+		GTP_DEBUG("I2C communication timeout, resetting chip...");
+		gtp_reset_guitar(client, 10);
+	}
+	return ret;
 }
 
 
@@ -151,29 +154,28 @@ s32 gtp_i2c_write(struct i2c_client *client,u8 *buf,s32 len)
 static int
 sel_fttouchpanel(struct i2c_client *client)
 {
-    int ret;
-    u8 buf[2];
-    struct i2c_msg msgs[2];
+	int ret;
+	u8 buf[2];
+	struct i2c_msg msgs[2];
 
-    buf[0] = GTP_REG_SENSOR_ID;
-    
-    msgs[0].addr = client->addr;
-    msgs[0].flags = 0;
-    msgs[0].len = 1;
-    msgs[0].buf = buf;
-    msgs[1].addr = client->addr;
-    msgs[1].flags = I2C_M_RD;
-    msgs[1].len = 1;
-    msgs[1].buf = buf;
+	buf[0] = GTP_REG_SENSOR_ID;
 
-    //msleep(1);
-    ret = i2c_transfer(client->adapter, msgs, 2);
-    if (ret < 0){
+	msgs[0].addr = client->addr;
+	msgs[0].flags = 0;
+	msgs[0].len = 1;
+	msgs[0].buf = buf;
+	msgs[1].addr = client->addr;
+	msgs[1].flags = I2C_M_RD;
+	msgs[1].len = 1;
+	msgs[1].buf = buf;
 
-        pr_err("msg %s i2c read error: %d\n", __func__, ret);
-        buf[0]=0;
-    }
-    return ret; 
+	//msleep(1);
+	ret = i2c_transfer(client->adapter, msgs, 2);
+	if (ret < 0){
+		pr_err("msg %s i2c read error: %d\n", __func__, ret);
+		buf[0]=0;
+	}
+	return ret; 
 }
 /*******************************************************
 Function:
@@ -189,37 +191,37 @@ Output:
 *********************************************************/
 s32 gtp_i2c_read_dbl_check(struct i2c_client *client, u16 addr, u8 *rxbuf, int len)
 {
-    u8 buf[16] = {0};
-    u8 confirm_buf[16] = {0};
-    u8 retry = 0;
-    
-    while (retry++ < 3)
-    {
-        memset(buf, 0xAA, 16);
-        buf[0] = (u8)(addr >> 8);
-        buf[1] = (u8)(addr & 0xFF);
-        gtp_i2c_read(client, buf, len + 2);
-        
-        memset(confirm_buf, 0xAB, 16);
-        confirm_buf[0] = (u8)(addr >> 8);
-        confirm_buf[1] = (u8)(addr & 0xFF);
-        gtp_i2c_read(client, confirm_buf, len + 2);
-        
-        if (!memcmp(buf, confirm_buf, len+2))
-        {
-            break;
-        }
-    }    
-    if (retry < 3)
-    {
-        memcpy(rxbuf, confirm_buf+2, len);
-        return SUCCESS;
-    }
-    else
-    {
-        GTP_ERROR("i2c read 0x%04X, %d bytes, double check failed!", addr, len);
-        return FAIL;
-    }
+	u8 buf[16] = {0};
+	u8 confirm_buf[16] = {0};
+	u8 retry = 0;
+
+	while (retry++ < 3)
+	{
+		memset(buf, 0xAA, 16);
+		buf[0] = (u8)(addr >> 8);
+		buf[1] = (u8)(addr & 0xFF);
+		gtp_i2c_read(client, buf, len + 2);
+
+		memset(confirm_buf, 0xAB, 16);
+		confirm_buf[0] = (u8)(addr >> 8);
+		confirm_buf[1] = (u8)(addr & 0xFF);
+		gtp_i2c_read(client, confirm_buf, len + 2);
+
+		if (!memcmp(buf, confirm_buf, len+2))
+		{
+			break;
+		}
+	}    
+	if (retry < 3)
+	{
+		memcpy(rxbuf, confirm_buf+2, len);
+		return SUCCESS;
+	}
+	else
+	{
+		GTP_ERROR("i2c read 0x%04X, %d bytes, double check failed!", addr, len);
+		return FAIL;
+	}
 }
 
 /*******************************************************
@@ -233,29 +235,29 @@ Output:
 *********************************************************/
 s32 gtp_send_cfg(struct i2c_client *client)
 {
-    s32 ret = 2;
-    
+	s32 ret = 2;
+
 #if GTP_DRIVER_SEND_CFG
-    s32 retry = 0;
-    struct goodix_ts_data *ts = i2c_get_clientdata(client);
-    
-    if (ts->fixed_cfg)
-    {
-        GTP_INFO("Ic fixed config, no config sent!");
-        return 2;
-    }
-    //GTP_INFO("driver send config");
-    for (retry = 0; retry < 5; retry++)
-    {
-        ret = gtp_i2c_write(client, config , GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH);
-        if (ret > 0)
-        {
-            break;
-        }
-    }
+	s32 retry = 0;
+	struct goodix_ts_data *ts = i2c_get_clientdata(client);
+
+	if (ts->fixed_cfg)
+	{
+		GTP_INFO("Ic fixed config, no config sent!");
+		return 2;
+	}
+	//GTP_INFO("driver send config");
+	for (retry = 0; retry < 5; retry++)
+	{
+		ret = gtp_i2c_write(client, config , GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH);
+		if (ret > 0)
+		{
+			break;
+		}
+	}
 #endif
 
-    return ret;
+	return ret;
 }
 
 /*******************************************************
@@ -268,17 +270,17 @@ Output:
 *********************************************************/
 void gtp_irq_disable(struct goodix_ts_data *ts)
 {
-    unsigned long irqflags;
+	unsigned long irqflags;
 
-    GTP_DEBUG_FUNC();
+	GTP_DEBUG_FUNC();
 
-    spin_lock_irqsave(&ts->irq_lock, irqflags);
-    if (!ts->irq_is_disable)
-    {
-        ts->irq_is_disable = 1; 
-        disable_irq_nosync(ts->client->irq);
-    }
-    spin_unlock_irqrestore(&ts->irq_lock, irqflags);
+	spin_lock_irqsave(&ts->irq_lock, irqflags);
+	if (!ts->irq_is_disable)
+	{
+		ts->irq_is_disable = 1; 
+		disable_irq_nosync(ts->client->irq);
+	}
+	spin_unlock_irqrestore(&ts->irq_lock, irqflags);
 }
 
 /*******************************************************
@@ -291,17 +293,17 @@ Output:
 *********************************************************/
 void gtp_irq_enable(struct goodix_ts_data *ts)
 {
-    unsigned long irqflags = 0;
+	unsigned long irqflags = 0;
 
-    GTP_DEBUG_FUNC();
-    
-    spin_lock_irqsave(&ts->irq_lock, irqflags);
-    if (ts->irq_is_disable) 
-    {
-        enable_irq(ts->client->irq);
-        ts->irq_is_disable = 0; 
-    }
-    spin_unlock_irqrestore(&ts->irq_lock, irqflags);
+	GTP_DEBUG_FUNC();
+
+	spin_lock_irqsave(&ts->irq_lock, irqflags);
+	if (ts->irq_is_disable) 
+	{
+		enable_irq(ts->client->irq);
+		ts->irq_is_disable = 0; 
+	}
+	spin_unlock_irqrestore(&ts->irq_lock, irqflags);
 }
 
 
@@ -319,12 +321,13 @@ Output:
 *********************************************************/
 static void gtp_touch_down(struct goodix_ts_data* ts,s32 id,s32 x,s32 y,s32 w)
 {
-    input_report_abs(ts->input_dev, ABS_X, x);
-    input_report_abs(ts->input_dev, ABS_Y, y);
-    input_report_abs(ts->input_dev, ABS_PRESSURE,w);
-    input_report_key(ts->input_dev, BTN_TOUCH, w);
-//  input_sync(ts->input_dev);  
-    GTP_DEBUG("ID:%d, X:%d, Y:%d, W:%d", id, x, y, w);
+	input_report_abs(ts->input_dev, ABS_X, x);
+	input_report_abs(ts->input_dev, ABS_Y, y);
+	input_report_abs(ts->input_dev, ABS_PRESSURE,w);
+	//input_report_abs(ts->input_dev, ABS_PRESSURE, 1);
+	//input_report_key(ts->input_dev, BTN_TOUCH, w);
+	input_sync(ts->input_dev);  
+	GTP_DEBUG("ID:%d, X:%3d, Y:%d, Pressure:%3d", id, x, y, w);
 }
 
 /*******************************************************
@@ -337,12 +340,12 @@ Output:
 *********************************************************/
 static void gtp_touch_up(struct goodix_ts_data* ts, s32 id)
 {
-//  input_report_abs(data->input_dev, ABS_X, event->au16_x[i]);
-//  input_report_abs(data->input_dev, ABS_Y, event->au16_y[i]);
-            
-    input_report_abs(ts->input_dev, ABS_PRESSURE,0);
-    input_report_key(ts->input_dev, BTN_TOUCH, 0);
-//    input_sync(ts->input_dev);  
+	//  input_report_abs(data->input_dev, ABS_X, event->au16_x[i]);
+	//  input_report_abs(data->input_dev, ABS_Y, event->au16_y[i]);
+	        
+	input_report_abs(ts->input_dev, ABS_PRESSURE, 0);
+	input_report_key(ts->input_dev, BTN_TOUCH, 0);
+	input_sync(ts->input_dev);  
 }
 
 
@@ -358,101 +361,102 @@ Output:
 //extern void set_using_ts(int using);
 static void goodix_ts_work_func(struct work_struct *work)
 {
-    u8  end_cmd[3] = {GTP_READ_COOR_ADDR >> 8, GTP_READ_COOR_ADDR & 0xFF, 0};
-    u8  point_data[2 + 1 + 8 * GTP_MAX_TOUCH + 1]={GTP_READ_COOR_ADDR >> 8, GTP_READ_COOR_ADDR & 0xFF};
-    u8  touch_num = 0;
-    u8  finger = 0;
-    static u16 pre_touch = 0;
-    static u8 pre_key = 0;
-    u8  key_value = 0;
-    u8* coor_data = NULL;
-    s32 input_x = 0;
-    s32 input_y = 0;
-    s32 input_w = 0;
-    s32 id = 0;
-    s32 i  = 0;
-    s32 ret = -1;
-    struct goodix_ts_data *ts = NULL;
+	u8  end_cmd[3] = {GTP_READ_COOR_ADDR >> 8, GTP_READ_COOR_ADDR & 0xFF, 0};
+	u8  point_data[2 + 1 + 8 * GTP_MAX_TOUCH + 1]={GTP_READ_COOR_ADDR >> 8, GTP_READ_COOR_ADDR & 0xFF};
+	u8  touch_num = 0;
+	u8  finger = 0;
+	static u16 pre_touch = 0;
+	static u8 pre_key = 0;
+	u8  key_value = 0;
+	u8* coor_data = NULL;
+	s32 input_x = 0;
+	s32 input_y = 0;
+	s32 input_w = 0;
+	s32 id = 0;
+	s32 i  = 0;
+	s32 ret = -1;
+	struct goodix_ts_data *ts = NULL;
 
-    //set_using_ts(1);
-    //wwwwwwwwwwwwwwwwwww
-   // GTP_INFO("GTP Driver working fun");
+	//set_using_ts(1);
+	// GTP_INFO("GTP Driver working fun");
 
-    GTP_DEBUG_FUNC();
-    ts = container_of(work, struct goodix_ts_data, work);
-    if (ts->enter_update)
-    {
-        return;
-    }
+	GTP_DEBUG_FUNC();
+	ts = container_of(work, struct goodix_ts_data, work);
+	if (ts->enter_update)
+	{
+		return;
+	}
 
-    ret = gtp_i2c_read(ts->client, point_data, 12);
-    if (ret < 0)
-    {
-       // GTP_ERROR("I2C transfer error. errno:%d\n ", ret);
-        goto exit_work_func;
-    }
-    finger = point_data[GTP_ADDR_LENGTH];    
-    if((finger & 0x80) == 0)
-    {
-        goto exit_work_func;
-    }
+	ret = gtp_i2c_read(ts->client, point_data, 12);
+	if (ret < 0)
+	{
+		// GTP_ERROR("I2C transfer error. errno:%d\n ", ret);
+		goto exit_work_func;
+	}
+	finger = point_data[GTP_ADDR_LENGTH];    
+	if((finger & 0x80) == 0)
+	{
+		goto exit_work_func;
+	}
 
-    touch_num = finger & 0x0f;
-    if (touch_num > GTP_MAX_TOUCH)
-    {
-        goto exit_work_func;
-    }
+	touch_num = finger & 0x0f;
+	if (touch_num > GTP_MAX_TOUCH)
+	{
+		goto exit_work_func;
+	}
 
-    if (touch_num > 1)
-    {
-        u8 buf[8 * GTP_MAX_TOUCH] = {(GTP_READ_COOR_ADDR + 10) >> 8, (GTP_READ_COOR_ADDR + 10) & 0xff};
+	if (touch_num > 1)
+	{
+		u8 buf[8 * GTP_MAX_TOUCH] = {(GTP_READ_COOR_ADDR + 10) >> 8, (GTP_READ_COOR_ADDR + 10) & 0xff};
 
-        ret = gtp_i2c_read(ts->client, buf, 2 + 8 * (touch_num - 1)); 
-        memcpy(&point_data[12], &buf[2], 8 * (touch_num - 1));
-    }
+		ret = gtp_i2c_read(ts->client, buf, 2 + 8 * (touch_num - 1)); 
+		memcpy(&point_data[12], &buf[2], 8 * (touch_num - 1));
+	}
 
-    pre_key = key_value;
+	pre_key = key_value;
 
-    GTP_DEBUG("pre_touch:%02x, finger:%02x.", pre_touch, finger);
+	GTP_DEBUG("pre_touch:%02x, finger:%02x.", pre_touch, finger);
 
 
-    input_report_key(ts->input_dev, BTN_TOUCH, (touch_num || key_value));
+	input_report_key(ts->input_dev, BTN_TOUCH, (touch_num || key_value));
 
-    if (touch_num)
-    {
-        for (i = 0; i < touch_num; i++)
-        {
-            coor_data = &point_data[i * 8 + 3];
-            id = coor_data[0];      //  & 0x0F;
-            input_x  = coor_data[1] | (coor_data[2] << 8);
-            input_y  = coor_data[3] | (coor_data[4] << 8);
-            input_w  = coor_data[5] | (coor_data[6] << 8);
-            gtp_touch_down(ts, id, input_x, input_y, 1);
-        }
-    }
-    else if (pre_touch)
-    {
-        GTP_DEBUG("Touch Release!");
-        gtp_touch_up(ts, 0);
-    }
+	if (touch_num)
+	{
+		for (i = 0; i < touch_num; i++)
+		{
+			coor_data = &point_data[i * 8 + 3];
+			id = coor_data[0];      //  & 0x0F;
+			input_x  = coor_data[1] | (coor_data[2] << 8);
+			input_y  = coor_data[3] | (coor_data[4] << 8);
+			input_w  = coor_data[5] | (coor_data[6] << 8);
+			//gtp_touch_down(ts, id, input_x, input_y, 1);
+			gtp_touch_down(ts,  id,  input_x,  input_y,  input_w);
+		}
+	}
+	else if (pre_touch)
+	{
+		GTP_DEBUG("Touch Release!");
+		gtp_touch_up(ts, 0);
+	}
 
-    pre_touch = touch_num;
+	pre_touch = touch_num;
 
-    input_sync(ts->input_dev);
+	input_sync(ts->input_dev);
+	
 exit_work_func:
-    if(!ts->gtp_rawdiff_mode)
-    {
-        ret = gtp_i2c_write(ts->client, end_cmd, 3);
-      //  if (ret < 0)
-      //  {
-       //     GTP_INFO("I2C write end_cmd error!");
-       // }
-    }
-    if (ts->use_irq)
-    {
-        gtp_irq_enable(ts);
-    }
-    //set_using_ts(0);
+	if(!ts->gtp_rawdiff_mode)
+	{
+	    ret = gtp_i2c_write(ts->client, end_cmd, 3);
+	  //  if (ret < 0)
+	  //  {
+	   //     GTP_INFO("I2C write end_cmd error!");
+	   // }
+	}
+	if (ts->use_irq)
+	{
+	    gtp_irq_enable(ts);
+	}
+	//set_using_ts(0);
 }
 
 /*******************************************************
@@ -466,13 +470,13 @@ Output:
 *********************************************************/
 static enum hrtimer_restart goodix_ts_timer_handler(struct hrtimer *timer)
 {
-    struct goodix_ts_data *ts = container_of(timer, struct goodix_ts_data, timer);
+	struct goodix_ts_data *ts = container_of(timer, struct goodix_ts_data, timer);
 
-    GTP_DEBUG_FUNC();
+	GTP_DEBUG_FUNC();
 
-    queue_work(goodix_wq, &ts->work);
-    hrtimer_start(&ts->timer, ktime_set(0, (GTP_POLL_TIME+6)*1000000), HRTIMER_MODE_REL);
-    return HRTIMER_NORESTART;
+	queue_work(goodix_wq, &ts->work);
+	hrtimer_start(&ts->timer, ktime_set(0, (GTP_POLL_TIME+6)*1000000), HRTIMER_MODE_REL);
+	return HRTIMER_NORESTART;
 }
 
 /*******************************************************
@@ -487,15 +491,15 @@ Output:
 *********************************************************/
 static irqreturn_t goodix_ts_irq_handler(int irq, void *dev_id)
 {
-    struct goodix_ts_data *ts = dev_id;
+	struct goodix_ts_data *ts = dev_id;
 
-    GTP_DEBUG_FUNC();
- 
-    gtp_irq_disable(ts);
+	GTP_DEBUG_FUNC();
 
-    queue_work(goodix_wq, &ts->work);
-    
-    return IRQ_HANDLED;
+	gtp_irq_disable(ts);
+
+	queue_work(goodix_wq, &ts->work);
+
+	return IRQ_HANDLED;
 }
 
 /*******************************************************
@@ -508,9 +512,9 @@ Output:
 *******************************************************/
 void gtp_int_sync(s32 ms)
 {
-    GTP_GPIO_OUTPUT(GTP_INT_PORT, 0);
-    msleep(ms);
-    GTP_GPIO_AS_INT(GTP_INT_PORT);
+	GTP_GPIO_OUTPUT(GTP_INT_PORT, 0);
+	msleep(ms);
+	GTP_GPIO_AS_INT(GTP_INT_PORT);
 }
 
 /*******************************************************
@@ -523,21 +527,21 @@ Output:
 *******************************************************/
 void gtp_reset_guitar(struct i2c_client *client, s32 ms)
 {
-    GTP_DEBUG_FUNC();
+	GTP_DEBUG_FUNC();
 
-    GTP_GPIO_OUTPUT(GTP_RST_PORT, 0);   // begin select I2C slave addr
-    msleep(ms);                         // T2: > 10ms
-    // HIGH: 0x28/0x29, LOW: 0xBA/0xBB
-    GTP_GPIO_OUTPUT(GTP_INT_PORT, client->addr == 0x14);
+	GTP_GPIO_OUTPUT(GTP_RST_PORT, 0);   // begin select I2C slave addr
+	msleep(ms);                         // T2: > 10ms
+	// HIGH: 0x28/0x29, LOW: 0xBA/0xBB
+	GTP_GPIO_OUTPUT(GTP_INT_PORT, client->addr == 0x14);
 
-    msleep(2);                          // T3: > 100us
-    GTP_GPIO_OUTPUT(GTP_RST_PORT, 1);
-    
-    msleep(6);                          // T4: > 5ms
+	msleep(2);                          // T3: > 100us
+	GTP_GPIO_OUTPUT(GTP_RST_PORT, 1);
 
-    GTP_GPIO_AS_INPUT(GTP_RST_PORT);    // end select I2C slave addr
+	msleep(6);                          // T4: > 5ms
 
-    gtp_int_sync(50);                  
+	GTP_GPIO_AS_INPUT(GTP_RST_PORT);    // end select I2C slave addr
+
+	gtp_int_sync(50);                  
 }
 
 /*******************************************************
@@ -798,37 +802,37 @@ Output:
 *******************************************************/
 static s8 gtp_request_io_port(struct goodix_ts_data *ts)
 {
-    s32 ret = 0;
+	s32 ret = 0;
 
-    ret = GTP_GPIO_REQUEST(GTP_INT_PORT, "GT9XX_INT_IRQ");
-    if (ret < 0) 
-    {
-        GTP_ERROR("Failed to request GPIO:%d, ERRNO:%d", (s32)GTP_INT_PORT, ret);
-        ret = -ENODEV;
-    }
-    else
-    {
-        GTP_GPIO_AS_INT(GTP_INT_PORT);  
-        ts->client->irq = GTP_INT_IRQ;
-    }
+	ret = GTP_GPIO_REQUEST(GTP_INT_PORT, "GT9XX_INT_IRQ");
+	if (ret < 0) 
+	{
+	    	GTP_ERROR("Failed to request GPIO:%d, ERRNO:%d", (s32)GTP_INT_PORT, ret);
+	    	ret = -ENODEV;
+	}
+	else
+	{
+	    	GTP_GPIO_AS_INT(GTP_INT_PORT);  
+	    	ts->client->irq = GTP_INT_IRQ;
+	}
 
-    ret = GTP_GPIO_REQUEST(GTP_RST_PORT, "GT9XX_RST_PORT");
-    if (ret < 0) 
-    {
-        GTP_ERROR("Failed to request GPIO:%d, ERRNO:%d",(s32)GTP_RST_PORT,ret);
-        ret = -ENODEV;
-    }
+	ret = GTP_GPIO_REQUEST(GTP_RST_PORT, "GT9XX_RST_PORT");
+	if (ret < 0) 
+	{
+	    	GTP_ERROR("Failed to request GPIO:%d, ERRNO:%d",(s32)GTP_RST_PORT,ret);
+	    	ret = -ENODEV;
+	}
 
-    GTP_GPIO_AS_INPUT(GTP_RST_PORT);
-    gtp_reset_guitar(ts->client, 20);
+	GTP_GPIO_AS_INPUT(GTP_RST_PORT);
+	gtp_reset_guitar(ts->client, 20);
 
-    if(ret < 0)
-    {
-        GTP_GPIO_FREE(GTP_RST_PORT);
-        GTP_GPIO_FREE(GTP_INT_PORT);
-    }
+	if(ret < 0)
+	{
+	    	GTP_GPIO_FREE(GTP_RST_PORT);
+	    	GTP_GPIO_FREE(GTP_INT_PORT);
+	}
 
-    return ret;
+	return ret;
 }
 
 /*******************************************************
@@ -883,49 +887,55 @@ Output:
 *******************************************************/
 static s8 gtp_request_input_dev(struct goodix_ts_data *ts)
 {
-    s8 ret = -1;
-    s8 phys[32];
-    struct input_dev *input_dev;
+	s8 ret = -1;
+	s8 phys[32];
+	struct input_dev *input_dev;
 
-    GTP_DEBUG_FUNC();
-  
-    ts->input_dev = input_allocate_device();
-    input_dev = ts->input_dev;
-    
-    if (ts->input_dev == NULL)
-    {
-        GTP_ERROR("Failed to allocate input device.");
-        return -ENOMEM;
-    }
+	GTP_DEBUG_FUNC();
 
-    ts->input_dev->evbit[0] = BIT_MASK(EV_SYN) | BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS) ;
-	
-    __set_bit(EV_ABS, ts->input_dev->evbit);
-    __set_bit(EV_KEY, ts->input_dev->evbit);
-    __set_bit(BTN_TOUCH, ts->input_dev->keybit);
-    __set_bit(ABS_X,ts->input_dev->absbit);
-    __set_bit(ABS_Y,ts->input_dev->absbit);
-    __set_bit(ABS_PRESSURE,ts->input_dev->absbit);
-    
-    input_set_abs_params(ts->input_dev,   ABS_X, 0, ts->abs_x_max, 0, 0);
-    input_set_abs_params(ts->input_dev,   ABS_Y, 0, ts->abs_y_max, 0, 0);
-    input_set_abs_params(ts->input_dev,   ABS_PRESSURE, 0, 1, 0, 0);
-    sprintf(phys, "input/ts");
-    ts->input_dev->name = goodix_ts_name;
-    ts->input_dev->phys = phys;
-    ts->input_dev->id.bustype = BUS_I2C;
-    ts->input_dev->id.vendor = 0xDEAD;
-    ts->input_dev->id.product = 0xBEEF;
-    ts->input_dev->id.version = 10427;
-    
-    ret = input_register_device(ts->input_dev);
-    if (ret)
-    {
-        GTP_ERROR("Register %s input device failed", ts->input_dev->name);
-        return -ENODEV;
-    }
-    
-    return 0;
+	ts->input_dev = input_allocate_device();
+	input_dev = ts->input_dev;
+
+	if (ts->input_dev == NULL)
+	{
+	    GTP_ERROR("Failed to allocate input device.");
+	    return -ENOMEM;
+	}
+
+	ts->input_dev->evbit[0] = BIT_MASK(EV_SYN) | BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS) ;
+
+	__set_bit(EV_ABS, ts->input_dev->evbit);
+	__set_bit(EV_KEY, ts->input_dev->evbit);
+	__set_bit(BTN_TOUCH, ts->input_dev->keybit);
+	__set_bit(ABS_X,ts->input_dev->absbit);
+	__set_bit(ABS_Y,ts->input_dev->absbit);
+	__set_bit(ABS_PRESSURE,ts->input_dev->absbit);
+
+#if	TS_MT
+	input_set_abs_params(ts->input_dev,   ABS_MT_POSITION_X, 0, ts->abs_x_max, 0, 0);
+	input_set_abs_params(ts->input_dev,   ABS_MT_POSITION_X, 0, ts->abs_y_max, 0, 0);
+	input_set_abs_params(ts->input_dev,   ABS_MT_PRESSURE, 0, 255, 0, 0);
+#else
+	input_set_abs_params(ts->input_dev,   ABS_X, 0, ts->abs_x_max, 0, 0);
+	input_set_abs_params(ts->input_dev,   ABS_Y, 0, ts->abs_y_max, 0, 0);
+	input_set_abs_params(ts->input_dev,   ABS_PRESSURE, 0, 255, 0, 0);
+#endif
+	sprintf(phys, "input/ts");
+	ts->input_dev->name = goodix_ts_name;
+	ts->input_dev->phys = phys;
+	ts->input_dev->id.bustype = BUS_I2C;
+	ts->input_dev->id.vendor = 0xDEAD;
+	ts->input_dev->id.product = 0xBEEF;
+	ts->input_dev->id.version = 10427;
+
+	ret = input_register_device(ts->input_dev);
+	if (ret)
+	{
+	    GTP_ERROR("Register %s input device failed", ts->input_dev->name);
+	    return -ENODEV;
+	}
+
+	return 0;
 }
 
 /*******************************************************
@@ -940,98 +950,99 @@ Output:
 *******************************************************/
 static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
-    s32 ret = -1;
-    struct goodix_ts_data *ts;
-    u16 version_info;
+	s32 ret = -1;
+	struct goodix_ts_data *ts;
+	u16 version_info;
 
-    GTP_DEBUG_FUNC();
- 
-    //do NOT remove these logs
-    GTP_INFO("GT9xx Driver Version: %s", GTP_DRIVER_VERSION);
-    GTP_INFO("GT9xx Driver Built@%s, %s", __TIME__, __DATE__);
-    GTP_INFO("GTP I2C Address: 0x%02x", client->addr);
-    dbg_info("entry \n");
-    i2c_connect_client = client;
-    
-    if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) 
-    {
-        GTP_ERROR("I2C check functionality failed.");
-        return -ENODEV;
-    }
-    ts = kzalloc(sizeof(*ts), GFP_KERNEL);
-    if (ts == NULL)
-    {
-        GTP_ERROR("Alloc GFP_KERNEL memory failed.");
-        return -ENOMEM;
-    }
-   
-    memset(ts, 0, sizeof(*ts));
-    INIT_WORK(&ts->work, goodix_ts_work_func);
-    ts->client = client;
-    spin_lock_init(&ts->irq_lock);          // 2.6.39 later
-    // ts->irq_lock = SPIN_LOCK_UNLOCKED;   // 2.6.39 & before
-    i2c_set_clientdata(client, ts);
-    
-    ts->gtp_rawdiff_mode = 0;
-    ret=sel_fttouchpanel(client);
-     if(ret < 0){
-        goto probe_ftout;
-    }
-   else
-   {
-    ret = gtp_request_io_port(ts);
-    if (ret < 0)
-    {
-        GTP_ERROR("GTP request IO port failed.");
-        kfree(ts);
-        return ret;
-    }
+	GTP_DEBUG_FUNC();
 
-    ret = gtp_i2c_test(client);
-    if (ret < 0)
-    {
-        GTP_ERROR("I2C communication ERROR!");
-    }
-   else
-   {
-	GTP_ERROR("I2C communication success!");
-   }
-    
-    ret = gtp_init_panel(ts);
-    if (ret < 0)
-    {
-        GTP_ERROR("GTP init panel failed.");
-        ts->abs_x_max = GTP_MAX_WIDTH;
-        ts->abs_y_max = GTP_MAX_HEIGHT;
-        ts->int_trigger_type = GTP_INT_TRIGGER;
-    }
+	//do NOT remove these logs
+	GTP_INFO("GT9xx Driver Version: %s", GTP_DRIVER_VERSION);
+	GTP_INFO("GT9xx Driver Built@%s, %s", __TIME__, __DATE__);
+	//GTP_INFO("GTP I2C Address: 0x%02x", client->addr);
+	dbg_info("entry \n");
+	i2c_connect_client = client;
 
-    ret = gtp_request_input_dev(ts);
-    if (ret < 0)
-    {
-        GTP_ERROR("GTP request input dev failed");
-    }
-    
-    ret = gtp_request_irq(ts); 
-    if (ret < 0)
-        GTP_INFO("GTP works in polling mode.");
- //   }
- //   else
- //   {
-  //      GTP_INFO("GTP works in interrupt mode.");
-  //  }
-  }
-    ret = gtp_read_version(client, &version_info);
-    if (ret < 0)
-    {
-        GTP_ERROR("Read version failed.");
-    }
-    if (ts->use_irq)
-    {
-        gtp_irq_enable(ts);
-    }
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) 
+	{
+		GTP_ERROR("I2C check functionality failed.");
+		return -ENODEV;
+	}
+	ts = kzalloc(sizeof(*ts), GFP_KERNEL);
+	if (ts == NULL)
+	{
+		GTP_ERROR("Alloc GFP_KERNEL memory failed.");
+		return -ENOMEM;
+	}
 
-    return 0;
+	memset(ts, 0, sizeof(*ts));
+	INIT_WORK(&ts->work, goodix_ts_work_func);
+	ts->client = client;
+	spin_lock_init(&ts->irq_lock);          // 2.6.39 later
+	// ts->irq_lock = SPIN_LOCK_UNLOCKED;   // 2.6.39 & before
+	i2c_set_clientdata(client, ts);
+
+	ts->gtp_rawdiff_mode = 0;
+	ret=sel_fttouchpanel(client);
+	 if(ret < 0){
+		goto probe_ftout;
+	}
+	else
+	{
+		ret = gtp_request_io_port(ts);
+		if (ret < 0)
+		{
+			GTP_ERROR("GTP request IO port failed.");
+			kfree(ts);
+			return ret;
+		}
+
+		ret = gtp_i2c_test(client);
+		if (ret < 0)
+		{
+		    	GTP_ERROR("I2C communication ERROR!");
+		}
+		else
+		{
+			GTP_ERROR("I2C communication success!");
+		}
+
+		ret = gtp_init_panel(ts);
+		if (ret < 0)
+		{
+			GTP_ERROR("GTP init panel failed.");
+			ts->abs_x_max = GTP_MAX_WIDTH;
+			ts->abs_y_max = GTP_MAX_HEIGHT;
+			ts->int_trigger_type = GTP_INT_TRIGGER;
+		}
+
+		ret = gtp_request_input_dev(ts);
+		if (ret < 0)
+		{
+		    	GTP_ERROR("GTP request input dev failed");
+		}
+
+		ret = gtp_request_irq(ts); 
+		if (ret < 0)
+		{
+		    	GTP_INFO("GTP works in polling mode.");
+		 }
+		else
+		{
+			GTP_INFO("GTP works in interrupt mode.");
+		}
+	}
+	ret = gtp_read_version(client, &version_info);
+	if (ret < 0)
+	{
+	    GTP_ERROR("Read version failed.");
+	}
+	if (ts->use_irq)
+	{
+	    gtp_irq_enable(ts);
+	}
+
+	return 0;
 probe_ftout:
             printk("[GT9xx_TP]:GT9xx_touch was not used!\n ");
 
@@ -1048,28 +1059,29 @@ Output:
 *******************************************************/
 static int goodix_ts_remove(struct i2c_client *client)
 {
-    struct goodix_ts_data *ts = i2c_get_clientdata(client);
-    
-    GTP_DEBUG_FUNC();
+	struct goodix_ts_data *ts = i2c_get_clientdata(client);
 
-    if (ts) 
-    {
-        if (ts->use_irq)
-        {
-            GTP_GPIO_AS_INPUT(GTP_INT_PORT);
-            GTP_GPIO_FREE(GTP_INT_PORT);
-            free_irq(client->irq, ts);
-        }
-        else
-        {
-            hrtimer_cancel(&ts->timer);
-        }
-    }   
-    
-    GTP_INFO("GTP driver removing...");
-    i2c_set_clientdata(client, NULL);
-    input_unregister_device(ts->input_dev);
-    kfree(ts);
+	GTP_DEBUG_FUNC();
+
+	if (ts) 
+	{
+		if (ts->use_irq)
+		{
+			GTP_INFO("GTP_GPIO_FREE ..");
+			GTP_GPIO_AS_INPUT(GTP_INT_PORT);
+			GTP_GPIO_FREE(GTP_INT_PORT);
+			free_irq(client->irq, ts);
+		}
+		else
+		{
+			hrtimer_cancel(&ts->timer);
+		}
+	}   
+
+	GTP_INFO("GTP driver removing...");
+	i2c_set_clientdata(client, NULL);
+	input_unregister_device(ts->input_dev);
+	kfree(ts);
 
     return 0;
 }
