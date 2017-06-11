@@ -88,6 +88,8 @@ extern u16 total_len;
 #define GTP_COMPATIBLE_MODE   0
 #define CONFIG_HAS_EARLYSUSPEND 0
 
+#define TS_MT 0
+
 #define DEV_INFO    "[GT911]"
 #define GT_DEBUG   1
 
