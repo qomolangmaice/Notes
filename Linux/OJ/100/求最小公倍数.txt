@@ -1,0 +1,45 @@
+/*
+需求：
+	
+  正整数A 和 正整数B 的最小公倍数是指 能被A和B整除的最小的正整数值，设计一个算法，求输入A 和B的最小公倍数比如输入5和7 ，5和7 的最小公倍数是35，则需要返回35
+ 
+
+算法解析：
+
+最小公倍数 = x*y/最大公约数。
+该题的核心是计算最大公约数。
+ 
+最大公约数效率最高的方法是  辗转求余。
+ 
+假定有两个数，large， small。 其中large>small。
+mod = large % small
+如果 mod ==0，则最大公约数为small，
+如果 mod不为0， 则令 large = small， small = mod
+ 
+重复以上过程，很快就能找到最大公约数。
+ 
+这绝对是目前最快的求最大公约的方法。（当然要提前判断一下0，还有1或者x=y的特殊情况）
+*/
+
+#include <stdlib.h>
+#include "oj.h"
+//功能：获取nValue1和nValue2的最小公倍数
+//输入： nValue1， nValue2为正整数
+//输出：无
+//返回： nValue1和nValue2的最小公倍数
+
+unsigned int  GetMinCommonMultiple (unsigned int  x, unsigned int  y)
+{
+	if (x == 0 || y == 0)
+		return 0;
+
+	unsigned int min = 0;
+	min = (x > y) ? x : y;
+
+	while (x % min != 0 || y % min != 0)
+	{
+		min--;
+	}
+
+	return x * y / min;
+}
